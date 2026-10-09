@@ -180,7 +180,7 @@ export const en: LanguagePack = {
     "transfer.interrupted": "This transfer did not finish. You can send it again after the connection recovers.",
     "transfer.full": "This room already has a receiver.",
     "transfer.badCode": "That code is not valid.",
-    "transfer.needsSite": "Direct transfer needs the staging site or a deployed signaling service. A phone cannot reach preview on 127.0.0.1.",
+    "transfer.needsSite": "Direct transfer needs a deployed site. A local development server cannot pair devices.",
     "transfer.alsoCloud": "Also save to the cloud",
     "transfer.alsoCloudNeed": "Connect a drive before saving to the cloud.",
     "transfer.empty": "Write something or add a file first.",

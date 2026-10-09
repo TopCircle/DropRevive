@@ -1,10 +1,23 @@
 {
   "name": "droprevive",
   "private": true,
+  "description": "Send text and files between your own devices through your own Google Drive or OneDrive. PWA on Cloudflare Workers.",
+  "license": "MIT",
+  "author": "TopCircle",
+  "homepage": "https://github.com/TopCircle/DropRevive#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TopCircle/DropRevive.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TopCircle/DropRevive/issues"
+  },
   "sideEffects": false,
   "type": "module",
   "overrides": {
-    "nf3": "0.3.17"
+    "nf3": "0.3.17",
+    "undici": "^7.29.1",
+    "sharp": "^0.35.5"
   },
   "scripts": {
     "dev": "vite dev",
@@ -43,21 +56,17 @@
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@tailwindcss/vite": "^4.3.0",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-router": "^1.170.0",
     "@tanstack/react-start": "^1.168.0",
     "@tanstack/react-table": "^8.21.0",
-    "@tanstack/router-plugin": "^1.168.0",
-    "@vitejs/plugin-react": "^5.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.0.0",
     "jsqr": "^1.4.0",
-    "lightningcss": "^1.28.0",
     "lucide-react": "^0.510.0",
-    "nitro": "3.0.260610-beta",
+    "nitro": "3.0.260903-beta",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-day-picker": "^9.14.0",
@@ -67,28 +76,33 @@
     "recharts": "^2.13.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
-    "tailwindcss": "^4.3.0",
     "tw-animate-css": "^1.3.4",
-    "typescript": "^5.7.0",
     "vaul": "^1.1.2",
-    "vite": "^8.2.0",
-    "wrangler": "4.143.0",
     "zod": "^4.4.0",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.20.0",
+    "@tailwindcss/vite": "^4.3.0",
+    "@tanstack/router-plugin": "^1.168.0",
     "@types/node": "^22.16.5",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.2.0",
     "eslint": "^9.20.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
+    "lightningcss": "^1.28.0",
+    "miniflare": "4.20260730.0",
     "prettier": "^3.4.0",
-    "typescript-eslint": "^8.56.1"
+    "tailwindcss": "^4.3.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.56.1",
+    "vite": "^8.2.0",
+    "wrangler": "4.149.0"
   }
 }

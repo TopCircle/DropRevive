@@ -68,7 +68,7 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm run dev` | 本地开发，<http://localhost:8080>。环境里没有 client ID 时，网盘显示「未开通」 |
+| `npm run dev` | 本地开发，<http://localhost:8080>（只监听本机；要让局域网其他设备访问，用 `HOST=0.0.0.0 npm run dev`）。环境里没有 client ID 时，网盘显示「未开通」 |
 | `npm run build` | 按当前环境变量做生产构建，输出到 `.output/` |
 | `npm run deploy` | 部署到你自己的 Cloudflare 账号。会先检查 `wrangler.jsonc`：Worker 仍叫 `dropreceive`、路由仍指向 `drop.habor.dpdns.org`，或者没有设置路由时，在构建之前就拒绝执行 |
 | `npm run deploy:production` | 仅维护者。替换正式环境 Worker `dropreceive` |
@@ -119,5 +119,5 @@ npm run lint
 npm run build
 npm run deploy          # 自建部署；配置仍指向维护者域名时会拒绝
 npm run deploy:production # 只更新 https://drop.habor.dpdns.org
-npm run deploy:staging  # 维护者用：只更新私有测试站 Worker（地址不公开）
+STAGING_WORKER=<名字> npm run deploy:staging  # 维护者用：部署到 workers.dev 上的测试 Worker；没设 STAGING_WORKER 会拒绝
 ```
