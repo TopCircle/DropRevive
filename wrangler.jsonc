@@ -1,0 +1,15 @@
+// Keep `main` and `assets` out of this file: nitro fills them into the generated config.
+{
+  "name": "dropreceive",
+  "compatibility_date": "2026-09-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [{ "pattern": "drop.habor.dpdns.org", "custom_domain": true }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "TRANSFER_ROOM", "class_name": "TransferRoom" },
+      { "name": "TRANSFER_GATE", "class_name": "TransferGate" }
+    ]
+  },
+  "migrations": [{ "tag": "v1-transfer-room", "new_sqlite_classes": ["TransferRoom", "TransferGate"] }]
+}
