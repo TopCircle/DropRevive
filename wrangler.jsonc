@@ -1,10 +1,14 @@
+// Public profile: what the Deploy to Cloudflare button and `npm run deploy` ship.
+// A workers.dev Worker with no route; add your own domain in the Cloudflare dashboard
+// (Workers > your Worker > Settings > Domains & Routes). See docs/self-host.md.
 // Keep `main` and `assets` out of this file: nitro fills them into the generated config.
+// The maintainer's production site is a build profile (DROP_PROFILE=production,
+// scripts/wrangler-profile.mjs), not this file.
 {
-  "name": "dropreceive",
+  "name": "droprevive",
   "compatibility_date": "2026-09-26",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": false,
-  "routes": [{ "pattern": "drop.habor.dpdns.org", "custom_domain": true }],
+  "workers_dev": true,
   "durable_objects": {
     "bindings": [
       { "name": "TRANSFER_ROOM", "class_name": "TransferRoom" },

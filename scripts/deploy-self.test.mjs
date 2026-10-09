@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   commandName,
@@ -68,8 +69,25 @@ test("the maintainer domain is refused in every route form", () => {
   }
 });
 
-test("no route or custom domain at all is refused", () => {
-  for (const extra of [{}, { routes: [] }, { workers_dev: true }]) {
+test("workers.dev only (workers_dev: true, no routes) is allowed", () => {
+  for (const extra of [{ workers_dev: true }, { workers_dev: true, routes: [] }]) {
+    assert.equal(refusalReason(own(extra)), null, JSON.stringify(extra));
+  }
+});
+
+test("the tracked public wrangler.jsonc passes the guard", () => {
+  const text = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+  assert.equal(refusalReason(text), null);
+  assert.deepEqual(routePatterns(text), []);
+});
+
+test("workers.dev only is still refused under the maintainer's Worker name", () => {
+  const config = JSON.stringify({ name: "dropreceive", workers_dev: true });
+  assert.match(refusalReason(config) ?? "", /dropreceive/);
+});
+
+test("no route, no custom domain and no workers.dev is refused", () => {
+  for (const extra of [{}, { routes: [] }, { workers_dev: false }]) {
     assert.match(
       refusalReason(own(extra)) ?? "",
       /no route or custom domain/,
@@ -88,7 +106,7 @@ test("unreadable config is refused", () => {
 });
 
 test("the refusal names the command that was run", () => {
-  assert.equal(commandName("deploy"), "npm run deploy");
+  assert.equal(commandName("deploy"), "node scripts/deploy-self.mjs");
   assert.equal(commandName("deploy:self"), "npm run deploy:self");
   assert.equal(commandName(undefined), "node scripts/deploy-self.mjs");
   assert.equal(commandName("deploy:production"), "node scripts/deploy-self.mjs");

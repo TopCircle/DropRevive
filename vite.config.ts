@@ -4,6 +4,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
+import { PROFILE_VAR, profileFrom, profileOverrides } from "./scripts/wrangler-profile.mjs";
 
 function appRevision(): string {
   try {
@@ -36,8 +37,11 @@ export default defineConfig(({ command, isPreview }) => ({
       ? [
           nitro({
             // Cloudflare Workers (module syntax + static assets). wrangler.jsonc holds
-            // the worker name and domain; nitro writes the final config to .output/.
+            // the public Worker config; nitro writes the final config to .output/.
             preset: "cloudflare_module",
+            // DROP_PROFILE=production (deploy:production) targets the maintainer's Worker and
+            // domain; unset builds the public workers.dev profile from wrangler.jsonc.
+            cloudflare: { wrangler: profileOverrides(profileFrom(process.env[PROFILE_VAR])) },
             // Nitro v3 defaults serverDir to false; the transfer routes live in server/.
             serverDir: "./server",
           }),

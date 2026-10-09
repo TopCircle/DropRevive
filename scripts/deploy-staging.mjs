@@ -6,16 +6,15 @@
  *
  *   STAGING_WORKER=<your-staging-worker> npm run deploy:staging
  *
- * Reads .output/server/wrangler.json and writes a sibling staging file.
+ * Reads .output/server/wrangler.json (a public-profile build) and writes a sibling staging file.
  * Never deploys the production Worker name or the production domain.
  */
 import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-
-const PRODUCTION_WORKER = "dropreceive";
-const PRODUCTION_HOST = "drop.habor.dpdns.org";
+import { stripJsonc } from "./deploy-self.mjs";
+import { PRODUCTION_HOST, PRODUCTION_WORKER, profileMismatch } from "./wrangler-profile.mjs";
 
 const name = (process.env.STAGING_WORKER ?? "").trim();
 if (!name) {
@@ -45,6 +44,12 @@ staging.workers_dev = true;
 const text = JSON.stringify(staging, null, 2);
 if (staging.name === PRODUCTION_WORKER || text.includes(PRODUCTION_HOST)) {
   console.error("refusing to write a staging config that still targets production");
+  process.exit(1);
+}
+const tracked = JSON.parse(stripJsonc(readFileSync(join(root, "wrangler.jsonc"), "utf8")));
+const problem = profileMismatch(staging, "staging", tracked.migrations, name);
+if (problem) {
+  console.error(`deploy:staging refused (nothing deployed): ${problem}`);
   process.exit(1);
 }
 writeFileSync(stagingPath, text + "\n");

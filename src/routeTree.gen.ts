@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as SetupRouteImport } from './routes/setup'
+import { Route as ApiConfigRouteImport } from './routes/api/config'
 import { Route as ApiDriveAuthSplatRouteImport } from './routes/api/drive-auth/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +25,16 @@ const PrivacyRoute = PrivacyRouteImport.update({
   path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiConfigRoute = ApiConfigRouteImport.update({
+  id: '/api/config',
+  path: '/api/config',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDriveAuthSplatRoute = ApiDriveAuthSplatRouteImport.update({
   id: '/api/drive-auth/$',
   path: '/api/drive-auth/$',
@@ -32,30 +44,44 @@ const ApiDriveAuthSplatRoute = ApiDriveAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
+  '/setup': typeof SetupRoute
+  '/api/config': typeof ApiConfigRoute
   '/api/drive-auth/$': typeof ApiDriveAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
+  '/setup': typeof SetupRoute
+  '/api/config': typeof ApiConfigRoute
   '/api/drive-auth/$': typeof ApiDriveAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
+  '/setup': typeof SetupRoute
+  '/api/config': typeof ApiConfigRoute
   '/api/drive-auth/$': typeof ApiDriveAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/privacy' | '/api/drive-auth/$'
+  fullPaths: '/' | '/privacy' | '/setup' | '/api/config' | '/api/drive-auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/privacy' | '/api/drive-auth/$'
-  id: '__root__' | '/' | '/privacy' | '/api/drive-auth/$'
+  to: '/' | '/privacy' | '/setup' | '/api/config' | '/api/drive-auth/$'
+  id:
+    | '__root__'
+    | '/'
+    | '/privacy'
+    | '/setup'
+    | '/api/config'
+    | '/api/drive-auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PrivacyRoute: typeof PrivacyRoute
+  SetupRoute: typeof SetupRoute
+  ApiConfigRoute: typeof ApiConfigRoute
   ApiDriveAuthSplatRoute: typeof ApiDriveAuthSplatRoute
 }
 
@@ -75,6 +101,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/config': {
+      id: '/api/config'
+      path: '/api/config'
+      fullPath: '/api/config'
+      preLoaderRoute: typeof ApiConfigRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/drive-auth/$': {
       id: '/api/drive-auth/$'
       path: '/api/drive-auth/$'
@@ -88,6 +128,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PrivacyRoute: PrivacyRoute,
+  SetupRoute: SetupRoute,
+  ApiConfigRoute: ApiConfigRoute,
   ApiDriveAuthSplatRoute: ApiDriveAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

@@ -1,0 +1,22 @@
+# DropRevive Worker secrets. The Deploy to Cloudflare button asks for each of these.
+# Locally: copy to .dev.vars (never commit it). On Cloudflare: Workers > your Worker >
+# Settings > Variables and Secrets, or `npx wrangler secret put NAME`.
+# Step-by-step: docs/self-host.md (中文: docs/self-host.zh-CN.md).
+#
+# Only one drive? Enter `none` for both values of the other drive.
+# Not sure yet? Enter `none`, deploy, then open https://<your-site>/setup to see what is missing.
+
+# Google Cloud Console > APIs & Services > Credentials > OAuth client (Web application)
+GOOGLE_CLIENT_ID=none # xxxxxxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=none
+
+# Azure portal > App registrations > your app: Application (client) ID, and a client secret Value
+MS_CLIENT_ID=none
+MS_CLIENT_SECRET=none # expires within 24 months; rotate it
+
+# 32 random bytes, base64: openssl rand -base64 32
+DRIVE_COOKIE_KEY=none
+
+# This site's origin(s), comma-separated, no trailing slash:
+# https://droprevive.<your-subdomain>.workers.dev,https://drop.example.com
+ALLOWED_ORIGINS=none

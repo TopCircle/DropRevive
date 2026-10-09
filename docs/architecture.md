@@ -137,7 +137,8 @@ Notes:
 | Cache Storage (Service Worker) | Offline shell; system-share payload staged in `droprevive-share` until the app opens | This origin |
 | Durable Object `TransferRoom` | Transfer room: code, both random tokens, device names, phase; deleted on expiry | Worker only |
 | Durable Object `TransferGate` | `create:IP` / `join:IP` one-minute window counters; deleted when stale | Worker only |
-| Worker secrets | `ALLOWED_ORIGINS`, `GOOGLE_CLIENT_SECRET`, `MS_CLIENT_SECRET`, `DRIVE_COOKIE_KEY` | Worker only; not in the frontend bundle or `wrangler.jsonc` `vars` |
+| Worker secrets | `ALLOWED_ORIGINS`, `GOOGLE_CLIENT_SECRET`, `MS_CLIENT_SECRET`, `DRIVE_COOKIE_KEY` | Worker only; not in the frontend bundle or `wrangler.jsonc` `vars`. `/setup` shows only whether each is set |
+| Worker secrets (public values) | `GOOGLE_CLIENT_ID`, `MS_CLIENT_ID` | Sent to the page during SSR (root loader) and by `GET /api/config`; fall back to build-time `VITE_*` IDs |
 
 Clearing local cache removes only the browser rows above; drive files remain. Deleting an item in the app removes the matching drive files.
 
@@ -154,6 +155,8 @@ Clearing local cache removes only the browser rows above; drive files remain. De
 | `src/lib/transfer/` | Transfer protocol, chunking, limits (`limits.ts`), reconnect; scanner helpers `scan-camera.ts` and `scan-decode.ts` (section 6) |
 | `src/lib/links.ts`, `src/components/drop/telegram-icon.tsx` | The Telegram group URL (also in `SECURITY.md`; a test keeps them equal) and the logo used on the privacy page and next to Settings |
 | `scripts/deploy-self.mjs`, `scripts/deploy-staging.mjs`, `.github/workflows/ci.yml` | Guarded self-host deploy, staging deploy, CI |
+| `scripts/wrangler-profile.mjs`, `scripts/check-profile.mjs` | Public vs production Worker profile (`DROP_PROFILE`), post-build config check |
+| `src/routes/setup.tsx`, `src/lib/setup-status.ts`, `src/lib/runtime-config.ts`, `src/lib/server-config.ts` | `/setup` self-check, Worker settings read at request time |
 | `public/sw.js`, `public/manifest.webmanifest`, `public/icons/` | Service Worker, PWA manifest (incl. share target), icons |
 
 ## 5. Drive store modules

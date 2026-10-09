@@ -137,7 +137,8 @@ sequenceDiagram
 | Cache Storage（Service Worker） | 离线外壳；系统分享进来的内容暂存在 `droprevive-share`，打开应用后取走 | 本站 |
 | Durable Object `TransferRoom` | 直传房间：代码、两端随机令牌、设备名、阶段；过期删除 | 只有 Worker |
 | Durable Object `TransferGate` | `create:IP` / `join:IP` 一分钟窗口的计数，过期删除 | 只有 Worker |
-| Worker 密钥 | `ALLOWED_ORIGINS`、`GOOGLE_CLIENT_SECRET`、`MS_CLIENT_SECRET`、`DRIVE_COOKIE_KEY` | 只有 Worker；不进前端包，也不写进 `wrangler.jsonc` 的 `vars` |
+| Worker 密钥 | `ALLOWED_ORIGINS`、`GOOGLE_CLIENT_SECRET`、`MS_CLIENT_SECRET`、`DRIVE_COOKIE_KEY` | 只有 Worker；不进前端包，也不写进 `wrangler.jsonc` 的 `vars`。`/setup` 只显示是否已配置 |
+| Worker 密钥（公开值） | `GOOGLE_CLIENT_ID`、`MS_CLIENT_ID` | SSR 时由根路由 loader 交给页面，`GET /api/config` 也返回；没设时用构建时的 `VITE_*` |
 
 清除本机缓存只删上面浏览器里的部分，网盘里的文件还在。在应用里删除一条记录，才会把网盘里的对应文件删掉。
 
@@ -154,6 +155,8 @@ sequenceDiagram
 | `src/lib/transfer/` | 直传协议、分块、限额（`limits.ts`）、重连；扫码辅助 `scan-camera.ts`、`scan-decode.ts`（第 6 节） |
 | `src/lib/links.ts`、`src/components/drop/telegram-icon.tsx` | Telegram 群组地址（`SECURITY.md` 里也有，由测试保证两处一致）和用在隐私页、设置旁边的 logo |
 | `scripts/deploy-self.mjs`、`scripts/deploy-staging.mjs`、`.github/workflows/ci.yml` | 带保护的自建部署、测试站部署、CI |
+| `scripts/wrangler-profile.mjs`、`scripts/check-profile.mjs` | 公开 / 正式站 Worker 配置（`DROP_PROFILE`），构建后核对配置 |
+| `src/routes/setup.tsx`、`src/lib/setup-status.ts`、`src/lib/runtime-config.ts`、`src/lib/server-config.ts` | `/setup` 自检页，运行时读取 Worker 设置 |
 | `public/sw.js`、`public/manifest.webmanifest`、`public/icons/` | Service Worker、PWA 清单（含分享目标）、图标 |
 
 ## 5. 网盘 store 的模块

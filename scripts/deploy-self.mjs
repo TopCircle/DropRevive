@@ -2,12 +2,13 @@
 /**
  * Deploy this app to the deployer's own Cloudflare account.
  *
- * `npm run deploy:production` is the maintainer command for drop.habor.dpdns.org and
- * bakes that site's public client IDs. This command (`npm run deploy` or
- * `npm run deploy:self`) checks wrangler.jsonc before it builds anything and refuses
- * to run while the config could still replace the maintainer's Worker: the Worker
- * is still named `dropreceive`, a route or custom domain points into the maintainer's
- * zone, or no route or custom domain is configured at all.
+ * `npm run deploy:production` is the maintainer command for drop.habor.dpdns.org.
+ * `npm run deploy` is a plain `wrangler deploy` of an existing build (what the Deploy to
+ * Cloudflare button runs after `npm run build`). This command (`npm run deploy:self`)
+ * checks wrangler.jsonc, then builds and deploys. It refuses to run while the config
+ * could still replace the maintainer's Worker: the Worker is named `dropreceive`, or a
+ * route or custom domain points into the maintainer's zone. A workers.dev-only Worker
+ * (`workers_dev: true`, no routes) is fine, and so is your own route or custom domain.
  */
 import { spawn } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
@@ -61,8 +62,8 @@ export function refusalReason(text) {
   if (name === MAINTAINER_WORKER) {
     return `the Worker is still named "${MAINTAINER_WORKER}", the maintainer's production Worker. Rename it, e.g. "my-droprevive".`;
   }
-  if (patterns.length === 0)
-    return "no route or custom domain is configured. Point routes at your own domain.";
+  if (patterns.length === 0 && parsed.workers_dev !== true)
+    return 'no route or custom domain is configured and workers_dev is not true. Set "workers_dev": true or point routes at your own domain.';
   if (patterns.some((pattern) => !pattern)) return "a route in wrangler.jsonc has no pattern.";
   if (usesMaintainerRoute(text))
     return `routes still point at ${MAINTAINER_HOST}. Change them to your own domain.`;
@@ -71,7 +72,7 @@ export function refusalReason(text) {
 
 /** The command the user typed, for the refusal message. */
 export function commandName(event = process.env.npm_lifecycle_event) {
-  return event === "deploy" || event === "deploy:self"
+  return event === "deploy:self"
     ? `npm run ${event}`
     : "node scripts/deploy-self.mjs";
 }
