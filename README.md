@@ -68,7 +68,7 @@ If UI language was never saved: browser languages starting with `zh` get Chinese
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Local dev at <http://localhost:8080>. Without client IDs in the environment, drives show as unavailable |
+| `npm run dev` | Local dev at <http://localhost:8080> (listens on localhost only; `HOST=0.0.0.0 npm run dev` to reach it from other devices on your LAN). Without client IDs in the environment, drives show as unavailable |
 | `npm run build` | Production build into `.output/` using the current env vars |
 | `npm run deploy` | Deploy to your Cloudflare account. Checks `wrangler.jsonc` first and refuses, before building, while the Worker is named `dropreceive`, a route points at `drop.habor.dpdns.org`, or no route is set |
 | `npm run deploy:production` | Maintainers only. Replaces production Worker `dropreceive` |
@@ -119,5 +119,5 @@ npm run lint
 npm run build
 npm run deploy          # self-host; refuses while the maintainer domain is configured
 npm run deploy:production # updates https://drop.habor.dpdns.org only
-npm run deploy:staging  # maintainers: updates the private test-site Worker only (its address is not public)
+STAGING_WORKER=<name> npm run deploy:staging  # maintainers: deploys a test Worker on workers.dev; refuses without STAGING_WORKER
 ```

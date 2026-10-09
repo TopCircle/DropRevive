@@ -174,7 +174,7 @@ export const zhMessages = {
   "transfer.interrupted": "这一次没传完。连接恢复后可以再发。",
   "transfer.full": "这个房间已经有接收方。",
   "transfer.badCode": "代码不对。",
-  "transfer.needsSite": "临时直传要连 staging 或已部署的信令服务。127.0.0.1 的 preview 手机访问不到。",
+  "transfer.needsSite": "临时直传需要已部署的站点，本地开发服务器不能配对设备。",
   "transfer.alsoCloud": "也存到云端",
   "transfer.alsoCloudNeed": "先连接网盘，再存到云端。",
   "transfer.empty": "先写文字或放入文件。",

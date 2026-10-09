@@ -15,7 +15,7 @@ npm ci
 ### Everyday commands
 
 ```bash
-npm run dev        # dev server on http://localhost:8080
+npm run dev        # dev server on http://localhost:8080 (localhost only; HOST=0.0.0.0 npm run dev to expose it on your LAN)
 npm test           # unit and integration tests (node --test)
 npm run lint       # ESLint; must report 0 errors
 npm run typecheck  # tsc --noEmit
@@ -54,7 +54,7 @@ npm ci
 ### 常用命令
 
 ```bash
-npm run dev        # 开发服务器 http://localhost:8080
+npm run dev        # 开发服务器 http://localhost:8080（只监听本机；HOST=0.0.0.0 npm run dev 可让局域网访问）
 npm test           # 单元测试和集成测试（node --test）
 npm run lint       # ESLint，必须 0 个 error
 npm run typecheck  # tsc --noEmit

@@ -18,7 +18,8 @@ export default defineConfig(({ command, isPreview }) => ({
     __APP_REVISION__: JSON.stringify(appRevision()),
   },
   server: {
-    host: "0.0.0.0",
+    // localhost only by default; HOST=0.0.0.0 npm run dev exposes it on the LAN.
+    host: process.env.HOST || "localhost",
     port: 8080,
     strictPort: true,
   },

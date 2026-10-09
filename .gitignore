@@ -1,15 +1,8 @@
 node_modules/
 .DS_Store
-.project_id
-.github_repo
 .env
 .env.*
 .dev.vars
 .dev.vars.*
 .output/
 .wrangler/
-.grok/
-
-# Internal agent notes and plans live outside the repository
-AGENTS.md
-docs/superpowers/
