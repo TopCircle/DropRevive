@@ -2,13 +2,15 @@
 /**
  * Refuse to deploy a build whose generated wrangler config does not match the profile:
  *   node scripts/check-profile.mjs production|public [config path]
- * Run by deploy:production after the build and before `wrangler deploy`.
+ * `npm run deploy` (what the Deploy to Cloudflare button runs) checks `public`; deploy:production
+ * checks `production`. For production it first drops the public-only keys (preview_urls,
+ * secrets.required) from the generated file, so production deploys exactly what it did before.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stripJsonc } from "./deploy-self.mjs";
-import { profileMismatch } from "./wrangler-profile.mjs";
+import { profileMismatch, stripPublicOnly } from "./wrangler-profile.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const profile = process.argv[2];
@@ -17,7 +19,11 @@ if (profile !== "production" && profile !== "public") {
   process.exit(2);
 }
 const path = process.argv[3] ?? join(root, ".output/server/wrangler.json");
-const generated = JSON.parse(readFileSync(path, "utf8"));
+let generated = JSON.parse(readFileSync(path, "utf8"));
+if (profile === "production") {
+  generated = stripPublicOnly(generated);
+  writeFileSync(path, JSON.stringify(generated, null, 2));
+}
 const tracked = JSON.parse(stripJsonc(readFileSync(join(root, "wrangler.jsonc"), "utf8")));
 const problem = profileMismatch(generated, profile, tracked.migrations);
 if (problem) {

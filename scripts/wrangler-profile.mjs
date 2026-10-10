@@ -15,6 +15,34 @@ export const PRODUCTION_HOST = "drop.habor.dpdns.org";
 export const PUBLIC_WORKER = "droprevive";
 export const PROFILE_VAR = "DROP_PROFILE";
 
+/** Worker secrets the app reads; the Deploy to Cloudflare form asks for each (wrangler.jsonc secrets.required). */
+export const REQUIRED_SECRETS = [
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "MS_CLIENT_ID",
+  "MS_CLIENT_SECRET",
+  "DRIVE_COOKIE_KEY",
+  "ALLOWED_ORIGINS",
+];
+
+/**
+ * Keys in wrangler.jsonc that only the public (button / self-host) profile uses. The maintainer's
+ * production and staging deploys drop them, so their generated config stays what it was before the
+ * button existed (production does not have every required secret set yet).
+ */
+export const PUBLIC_ONLY_KEYS = ["preview_urls", "secrets"];
+
+/**
+ * A copy without the public-only keys.
+ * @param {Record<string, unknown>} config
+ * @returns {Record<string, unknown>}
+ */
+export function stripPublicOnly(config) {
+  const copy = { ...config };
+  for (const key of PUBLIC_ONLY_KEYS) delete copy[key];
+  return copy;
+}
+
 /** @typedef {"public" | "production"} Profile */
 
 /**
@@ -80,6 +108,11 @@ function patterns(routes) {
 /**
  * Why a generated wrangler config does not match the profile it was built for, or null.
  * `expectedMigrations` is the migrations list of the tracked wrangler.jsonc.
+ *
+ * public: any Worker name except the maintainer's (the button renames it to the repository name),
+ *   workers.dev on, preview URLs off, no routes, every required secret declared.
+ * production: dropreceive, workers.dev off, exactly the custom domain, no public-only keys.
+ * staging: the given name, workers.dev on, no routes, no public-only keys.
  * @param {Record<string, any>} config
  * @param {Profile | "staging"} profile
  * @param {unknown} expectedMigrations
@@ -95,20 +128,31 @@ export function profileMismatch(config, profile, expectedMigrations, stagingName
   if (JSON.stringify(classes) !== JSON.stringify(["TransferGate", "TransferRoom"])) {
     return "Durable Object bindings TransferRoom/TransferGate are missing";
   }
+  const name = typeof config.name === "string" ? config.name.trim() : "";
   if (profile === "production") {
-    if (config.name !== PRODUCTION_WORKER) return `name is ${config.name}, expected ${PRODUCTION_WORKER}`;
+    if (name !== PRODUCTION_WORKER) return `name is ${config.name}, expected ${PRODUCTION_WORKER}`;
     if (config.workers_dev !== false) return "production must not enable workers.dev";
     const custom = (config.routes ?? []).some(
       (/** @type {any} */ r) => r && r.pattern === PRODUCTION_HOST && r.custom_domain === true,
     );
     if (!custom || routes.length !== 1) return `production must have exactly the custom domain ${PRODUCTION_HOST}`;
+    const extra = PUBLIC_ONLY_KEYS.filter((key) => key in config);
+    if (extra.length) return `production must not carry ${extra.join(", ")}`;
     return null;
   }
-  const expectedName = profile === "staging" ? stagingName : PUBLIC_WORKER;
-  if (!expectedName || config.name !== expectedName) return `name is ${config.name}, expected ${expectedName}`;
-  if (config.name === PRODUCTION_WORKER) return "must not use the production Worker name";
-  if (config.workers_dev !== true) return "must deploy to workers.dev";
+  if (!name) return "the Worker has no name";
+  if (name === PRODUCTION_WORKER) return "must not use the production Worker name";
+  if (profile === "staging" && name !== stagingName) return `name is ${config.name}, expected ${stagingName}`;
+  if (config.workers_dev !== true) return "workers_dev must be true (the site lives on workers.dev)";
   if (routes.length > 0) return "must not have routes";
   if (JSON.stringify(config).includes(PRODUCTION_HOST)) return `must not mention ${PRODUCTION_HOST}`;
+  if (profile === "staging") {
+    const extra = PUBLIC_ONLY_KEYS.filter((key) => key in config);
+    return extra.length ? `staging must not carry ${extra.join(", ")}` : null;
+  }
+  if (config.preview_urls !== false) return "preview_urls must be false";
+  const declared = Array.isArray(config.secrets?.required) ? [...config.secrets.required].sort() : [];
+  const missing = REQUIRED_SECRETS.filter((secret) => !declared.includes(secret));
+  if (missing.length) return `secrets.required is missing ${missing.join(", ")}`;
   return null;
 }

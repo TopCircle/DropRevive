@@ -20,12 +20,14 @@ Only one drive? Skip that drive's section and enter `none` for its two values. T
 
 1. Sign in to Cloudflare and connect your GitHub (or GitLab) account when asked.
 2. Keep or change the repository name and the Worker name (default `droprevive`).
-3. The form asks for six secrets. If you do not have the values yet, enter `none` for each; you will set them in step 5. Build command `npm run build` and deploy command `npm run deploy` are filled in for you.
+3. The form should list six secrets (from `.dev.vars.example`, described in `package.json`). Each one is required. If you do not have a value yet, enter `none`; you will set the real values in step 5. Two you can fill in right away: `DRIVE_COOKIE_KEY` ([generate it](#cookie-key)) and `ALLOWED_ORIGINS` = `https://<worker-name>.<your-subdomain>.workers.dev`. Build command `npm run build` and deploy command `npm run deploy` are filled in for you.
 4. Deploy. Cloudflare creates the repository in your account, builds it, creates the two Durable Objects (LAN transfer rooms and rate limits) and deploys.
+
+**If the form did not ask for the secrets**, or the build log says `The following required secrets have not been set`: open Workers & Pages → your Worker → **Settings → Variables and Secrets**, add all six as type **Secret** (`none` for an unused drive), then **Deployments → Retry build** (or push any commit). `wrangler.jsonc` declares them in `secrets.required`, so a deploy refuses to go out while any is missing instead of shipping a site that cannot sign in.
 
 Your site is `https://<worker-name>.<your-subdomain>.workers.dev` (the subdomain is shown under Workers & Pages in the dashboard). Every push to your copy of the repository redeploys; secrets are kept.
 
-Without the button: clone the repository, `npm ci`, `npx wrangler login`, `npm run deploy:self`.
+Without the button: clone the repository, `npm ci`, `npx wrangler login`, copy `.dev.vars.example` to `.dev.vars` and fill it in, then `npm run deploy:self` (it uploads `.dev.vars` as the Worker's secrets with `wrangler deploy --secrets-file`).
 
 ## 2. Open /setup
 

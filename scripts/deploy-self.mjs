@@ -11,7 +11,7 @@
  * (`workers_dev: true`, no routes) is fine, and so is your own route or custom domain.
  */
 import { spawn } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -109,5 +109,8 @@ if (isDirectRun()) {
     process.exit(1);
   }
   await run("npm", ["run", "build"], root);
-  await run("wrangler", ["deploy"], root);
+  // wrangler.jsonc declares secrets.required, so a first deploy needs the values up front:
+  // fill .dev.vars from .dev.vars.example and they are uploaded with the Worker.
+  const secretsFile = join(root, ".dev.vars");
+  await run("wrangler", existsSync(secretsFile) ? ["deploy", "--secrets-file", secretsFile] : ["deploy"], root);
 }

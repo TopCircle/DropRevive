@@ -14,7 +14,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stripJsonc } from "./deploy-self.mjs";
-import { PRODUCTION_HOST, PRODUCTION_WORKER, profileMismatch } from "./wrangler-profile.mjs";
+import { PRODUCTION_HOST, PRODUCTION_WORKER, profileMismatch, stripPublicOnly } from "./wrangler-profile.mjs";
 
 const name = (process.env.STAGING_WORKER ?? "").trim();
 if (!name) {
@@ -34,7 +34,8 @@ const generatedPath = join(root, ".output/server/wrangler.json");
 const stagingPath = join(root, ".output/server/wrangler.staging.json");
 
 const generated = JSON.parse(readFileSync(generatedPath, "utf8"));
-const staging = structuredClone(generated);
+// Without the public-only keys (preview_urls, secrets.required): staging deploys as before.
+const staging = stripPublicOnly(structuredClone(generated));
 staging.name = name;
 delete staging.routes;
 delete staging.route;

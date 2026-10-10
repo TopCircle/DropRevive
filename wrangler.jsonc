@@ -9,6 +9,21 @@
   "compatibility_date": "2026-09-26",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  // Durable Object Workers get no version preview URLs anyway; keep the dashboard state explicit.
+  "preview_urls": false,
+  // The Deploy to Cloudflare form asks for these (descriptions: package.json "cloudflare.bindings";
+  // template: .dev.vars.example). `wrangler deploy` refuses while any is unset on the Worker.
+  // Enter `none` for a drive you do not use. See docs/self-host.md.
+  "secrets": {
+    "required": [
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+      "MS_CLIENT_ID",
+      "MS_CLIENT_SECRET",
+      "DRIVE_COOKIE_KEY",
+      "ALLOWED_ORIGINS"
+    ]
+  },
   "durable_objects": {
     "bindings": [
       { "name": "TRANSFER_ROOM", "class_name": "TransferRoom" },

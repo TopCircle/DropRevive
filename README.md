@@ -89,11 +89,13 @@ The list is also in [`.dev.vars.example`](.dev.vars.example); the button reads i
 | --- | --- |
 | `npm run dev` | Local dev at <http://localhost:8080> (localhost only; `HOST=0.0.0.0 npm run dev` for your LAN). Reads the six settings from the environment; without client IDs, drives show as unavailable |
 | `npm run build` | Build the public profile into `.output/` (Worker `droprevive`, `workers.dev`, no route) |
-| `npm run deploy` | Plain `wrangler deploy` of that build. This is what the button runs after `npm run build` |
+| `npm run deploy` | Checks the build is the public profile (workers.dev on, no route, not `dropreceive`), then `wrangler deploy`. This is what the button runs after `npm run build`. Refuses while any of the six secrets is unset on the Worker (`secrets.required`) |
 | `npm run deploy:self` | Build and deploy from your own machine. Refuses while the Worker is named `dropreceive` or a route points at `drop.habor.dpdns.org`; a `workers.dev`-only Worker or your own domain is fine |
 | `npm run deploy:production` | Maintainers only: builds the production profile (`DROP_PROFILE=production`, Worker `dropreceive`, custom domain `drop.habor.dpdns.org`) and checks the generated config before deploying |
 
-Without the button: fork or clone, `npx wrangler login`, `npm ci`, `npm run deploy:self`, then set the secrets as above.
+Without the button: fork or clone, `npx wrangler login`, `npm ci`, copy `.dev.vars.example` to `.dev.vars` and fill it in, then `npm run deploy:self` (uploads `.dev.vars` as the Worker's secrets).
+
+If the deploy form did not ask for the secrets, or the build log says they are missing: add all six in Worker → Settings → Variables and Secrets, then retry the build.
 
 For real sign-in locally, register `http://localhost:8080/api/drive-auth/google/callback` and `http://localhost:8080/api/drive-auth/microsoft/callback`, then run `npm run dev` with the settings in the environment. `ALLOWED_ORIGINS` is optional locally (`http://localhost:8080` is built in).
 
@@ -103,7 +105,7 @@ Maintainer client IDs are registered only for `https://drop.habor.dpdns.org`. Th
 
 - [Contributing](CONTRIBUTING.md) · [Architecture](docs/architecture.md) ([中文](docs/architecture.zh-CN.md)) · [Security policy](SECURITY.md)
 - GitHub Actions runs typecheck, tests, lint and build on pushes and pull requests. CI does not use deployment secrets.
-- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and LAN rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 21 script tests plus 278 others; lint is kept at 0 errors and 0 warnings.
+- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and LAN rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 26 script tests plus 278 others; lint is kept at 0 errors and 0 warnings.
 - Community and questions: the project's Telegram group, <https://t.me/droprevive>. Report security problems privately, see [SECURITY.md](SECURITY.md).
 - `wrangler.jsonc` is the public profile. The production site is a build profile in `scripts/wrangler-profile.mjs`; `npm test` checks that the public, production and staging configs come out as expected.
 
@@ -121,7 +123,7 @@ npm run typecheck
 npm test
 npm run lint
 npm run build
-npm run deploy          # wrangler deploy of the public build (what the button runs)
+npm run deploy          # check the public build, then wrangler deploy (what the button runs)
 npm run deploy:self     # build + deploy your own copy; refuses the maintainer's Worker and domain
 npm run deploy:production # updates https://drop.habor.dpdns.org only
 STAGING_WORKER=<name> npm run deploy:staging  # maintainers: deploys a test Worker on workers.dev; refuses without STAGING_WORKER

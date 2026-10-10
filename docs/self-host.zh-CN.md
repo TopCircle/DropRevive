@@ -20,12 +20,14 @@
 
 1. 登录 Cloudflare，按提示连接你的 GitHub（或 GitLab）账号。
 2. 仓库名和 Worker 名可以保留默认（`droprevive`），也可以改。
-3. 表单会要你填 6 个密钥。还没有值的话，每项先填 `none`，第 5 步再改。构建命令 `npm run build`、部署命令 `npm run deploy` 会自动填好。
+3. 表单应该列出 6 个密钥（来自 `.dev.vars.example`，说明写在 `package.json` 里），每项都必填。还没有值的就先填 `none`，第 5 步再改。有两项可以马上填：`DRIVE_COOKIE_KEY`（[生成方法](#cookie-密钥)）和 `ALLOWED_ORIGINS` = `https://<Worker 名>.<你的子域>.workers.dev`。构建命令 `npm run build`、部署命令 `npm run deploy` 会自动填好。
 4. 点部署。Cloudflare 会在你的账号里建仓库、构建、创建两个 Durable Object（局域网直传房间和限流），然后部署。
+
+**如果表单没有问这些密钥**，或者构建日志写着 `The following required secrets have not been set`：打开 Workers & Pages → 你的 Worker → **Settings → Variables and Secrets**，把 6 项都加上，类型选 **Secret**（不用的网盘填 `none`），然后到 **Deployments → Retry build** 重新构建（或随便 push 一个提交）。`wrangler.jsonc` 用 `secrets.required` 声明了这 6 项，缺任何一项时部署会直接拒绝，而不是上线一个登录不了的站点。
 
 站点地址是 `https://<Worker 名>.<你的子域>.workers.dev`（子域在后台 Workers & Pages 页面能看到）。以后你往自己那份仓库 push，都会自动重新部署，密钥会保留。
 
-不用按钮：clone 仓库，`npm ci`，`npx wrangler login`，`npm run deploy:self`。
+不用按钮：clone 仓库，`npm ci`，`npx wrangler login`，把 `.dev.vars.example` 复制成 `.dev.vars` 并填好，再运行 `npm run deploy:self`（它会用 `wrangler deploy --secrets-file` 把 `.dev.vars` 作为 Worker 密钥一起上传）。
 
 ## 2. 打开 /setup
 
