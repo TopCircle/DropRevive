@@ -62,8 +62,8 @@ test("production profile generates dropreceive + custom domain + identical migra
 });
 
 test("staging is the public build renamed", () => {
-  const config = staging("dropreceive-staging");
-  assert.equal(profileMismatch(config, "staging", tracked.migrations, "dropreceive-staging"), null);
+  const config = staging("example-staging");
+  assert.equal(profileMismatch(config, "staging", tracked.migrations, "example-staging"), null);
   assert.match(profileMismatch(staging("dropreceive"), "staging", tracked.migrations, "dropreceive") ?? "", /production/);
 });
 
