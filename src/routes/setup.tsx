@@ -36,7 +36,8 @@ const LABELS: Record<ConfigKey, { zh: string; en: string; anchor: string }> = {
 const STATE_TEXT: Record<ItemState, { zh: string; en: string; tone: string; mark: string }> = {
   ok: { zh: "已配置", en: "set", tone: "text-ok", mark: "✓" },
   fallback: { zh: "用构建时的值", en: "build value", tone: "text-ok", mark: "✓" },
-  missing: { zh: "缺少", en: "missing", tone: "text-danger", mark: "✕" },
+  off: { zh: "未设置（可选）", en: "not set (optional)", tone: "text-muted-foreground", mark: "–" },
+  "same-origin": { zh: "未设置：仅同源", en: "not set: same-origin only", tone: "text-ok", mark: "✓" },
   invalid: { zh: "不对", en: "invalid", tone: "text-warn", mark: "!" },
 };
 
@@ -62,12 +63,15 @@ function Verdict({ status }: { status: SetupStatus }) {
     <section
       data-testid="setup-verdict"
       data-ready={status.ready ? "yes" : "no"}
-      className={`mt-5 rounded-lg border border-border bg-card px-4 py-3 ${status.ready ? "" : "border-danger/40"}`}
+      className="mt-5 rounded-lg border border-border bg-card px-4 py-3"
     >
+      <p className="font-medium text-ok">✓ 网站已部署，局域网直传可以用 · Deployed; LAN transfer works</p>
       {status.ready ? (
-        <p className="font-medium text-ok">✓ 可以使用：{drives.join("、")} · Ready: {drives.join(", ")}</p>
+        <p className="font-medium text-ok">✓ 网盘已开通：{drives.join("、")} · Drives on: {drives.join(", ")}</p>
       ) : (
-        <p className="font-medium text-danger">✕ 还不能登录网盘 · Not ready to sign in yet</p>
+        <p className="text-muted-foreground">
+          网盘还没开通（可选，随时可以在下面配置）· No drive configured yet (optional; set it up any time below)
+        </p>
       )}
       {status.mode === "summary" && status.attention > 0 ? (
         <p className="text-muted-foreground">有 {status.attention} 项需要处理 · {status.attention} item(s) need attention</p>
@@ -89,10 +93,17 @@ function SummaryNote() {
 function Details({ status }: { status: SetupDetails }) {
   return (
     <>
-      <h2 className="mt-8 font-medium">Worker 密钥 · Worker secrets</h2>
+      <h2 className="mt-8 font-medium">Worker 密钥（全部可选）· Worker secrets (all optional)</h2>
       <p className="text-xs text-subtle">
-        Cloudflare 后台 → Workers → 你的 Worker → Settings → Variables and Secrets。只用一个网盘时，另一个网盘的两项填 <code className="font-mono">none</code> 或不填。
+        先部署，再配置：Cloudflare 后台 → Workers → 你的 Worker → Settings → Variables and Secrets，类型选 Secret，保存后刷新本页即可，不用重新部署。
+        一个网盘要同时有客户端 ID、客户端密钥和 <code className="font-mono">DRIVE_COOKIE_KEY</code> 才会开通；不用的网盘不填或填{" "}
+        <code className="font-mono">none</code>。
+        <br />
+        Deploy first, configure later: add these as type Secret under Settings → Variables and Secrets, then reload this page (no redeploy). A drive is on
+        only with its client ID, its client secret and <code className="font-mono">DRIVE_COOKIE_KEY</code>; leave an unused drive empty or{" "}
+        <code className="font-mono">none</code>.
       </p>
+      <DriveLines status={status} />
       <ul className="mt-3 divide-y divide-border rounded-lg border border-border bg-card">
         {status.items.map((item) => {
           const label = LABELS[item.key];
@@ -152,21 +163,67 @@ function Details({ status }: { status: SetupDetails }) {
   );
 }
 
+function DriveLines({ status }: { status: SetupDetails }) {
+  const line = (on: boolean, name: string) => (
+    <li className={on ? "text-ok" : "text-muted-foreground"}>
+      {on ? "✓" : "–"} {name}：{on ? "已开通 · on" : "未开通 · not configured"}
+    </li>
+  );
+  return (
+    <ul className="mt-2 space-y-0.5 text-xs" data-testid="setup-drives">
+      {line(status.drives.google, "Google Drive")}
+      {line(status.drives.microsoft, "OneDrive")}
+      <li className="text-ok">✓ 局域网直传 · LAN transfer：不需要任何密钥 · needs no secrets</li>
+    </ul>
+  );
+}
+
 function Hint({ item, state, status }: { item: ConfigKey; state: ItemState; status: SetupDetails }) {
   if (item === "ALLOWED_ORIGINS") {
+    if (state === "same-origin") {
+      return (
+        <p className="text-xs text-subtle">
+          未设置：只允许本站自己的地址（当前：<code className="font-mono">{status.origin}</code>）。只有要让别的地址用本站登录 / 配对时才需要设置。
+          <br />
+          Not set: same-origin only (current: <code className="font-mono">{status.origin}</code>). Set it only to allow other origins.
+        </p>
+      );
+    }
     if (state === "ok") return <p className="text-xs text-subtle">当前地址已在列表里 · This origin is listed ({status.allowedCount})</p>;
+    if (status.originMode === "malformed") {
+      return (
+        <p className="text-xs text-warn">
+          {status.invalidOrigins} 条都格式不对，所以什么地址都不允许（网盘登录和局域网直传都会被拒）。改成{" "}
+          <code className="font-mono">{status.origin}</code> 这样的完整地址，或删掉这一项（删掉后只允许本站地址）。
+          <br />
+          Every entry is malformed, so nothing is allowed (fail closed: drive sign-in and LAN transfer are refused). Use full origins such as{" "}
+          <code className="font-mono">{status.origin}</code>, or delete the variable for same-origin only.
+        </p>
+      );
+    }
     return (
       <p className="text-xs text-warn">
-        把 <code className="font-mono">{status.origin}</code> 加进去（逗号分隔）· Add this origin (comma-separated)
+        列表里没有当前地址，网盘登录和局域网直传会被拒。把 <code className="font-mono">{status.origin}</code> 加进去（逗号分隔），或删掉这一项（只允许本站地址）· This
+        origin is not listed: add it (comma-separated), or delete the variable for same-origin only
         {status.invalidOrigins > 0 ? ` · ${status.invalidOrigins} 条格式不对 / malformed` : ""}
       </p>
     );
   }
   if (item === "DRIVE_COOKIE_KEY" && state === "invalid") {
-    return <p className="text-xs text-warn">解码后不是 32 字节 · Does not decode to 32 bytes. <code className="font-mono">openssl rand -base64 32</code></p>;
+    return (
+      <p className="text-xs text-warn">
+        解码后不是 32 字节，两个网盘都不会开通 · Does not decode to 32 bytes, so both drives stay off. 生成 / generate:{" "}
+        <code className="font-mono">openssl rand -base64 32</code>
+      </p>
+    );
   }
-  if (item === "DRIVE_COOKIE_KEY" && state === "missing") {
-    return <p className="text-xs text-subtle"><code className="font-mono">openssl rand -base64 32</code></p>;
+  if (item === "DRIVE_COOKIE_KEY" && state === "off") {
+    return (
+      <p className="text-xs text-subtle">
+        两个网盘都要用它（加密登录 cookie）· Both drives need it (seals the sign-in cookie). 生成 / generate:{" "}
+        <code className="font-mono">openssl rand -base64 32</code>
+      </p>
+    );
   }
   if (state === "fallback") {
     return <p className="text-xs text-subtle">Worker 里没设，用的是构建时写入的值 · Not set on the Worker; using the build-time value</p>;

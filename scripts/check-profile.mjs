@@ -5,7 +5,7 @@
  * `npm run deploy` (what the Deploy to Cloudflare button runs) checks `public`; deploy:production
  * checks `production`. It first drops wrangler.jsonc's custom build (`build`) from the generated
  * file, so the `wrangler deploy` that follows does not build again; for production it also drops the
- * public-only keys (preview_urls, secrets.required), so production deploys exactly what it did before.
+ * public-only key preview_urls, so production deploys exactly what it did before.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

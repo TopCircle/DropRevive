@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   commandName,
+  hasActiveVars,
   refusalReason,
   routePatterns,
   stripJsonc,
@@ -122,4 +123,12 @@ test("the refusal names the command that was run", () => {
   assert.equal(commandName("deploy:self"), "npm run deploy:self");
   assert.equal(commandName(undefined), "node scripts/deploy-self.mjs");
   assert.equal(commandName("deploy:production"), "node scripts/deploy-self.mjs");
+});
+
+test(".dev.vars is uploaded only when it sets something", () => {
+  const example = readFileSync(new URL("../.dev.vars.example", import.meta.url), "utf8");
+  assert.equal(hasActiveVars(example), false);
+  assert.equal(hasActiveVars("# A=1\nB=\n  \n"), false);
+  assert.equal(hasActiveVars("# note\nDRIVE_COOKIE_KEY=abc\n"), true);
+  assert.equal(hasActiveVars("ALLOWED_ORIGINS = https://a.example\r\n"), true);
 });

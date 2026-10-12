@@ -40,7 +40,7 @@ const generatedPath = join(root, ".output/server/wrangler.json");
 const stagingPath = join(root, ".output/server/wrangler.staging.json");
 
 const generated = JSON.parse(readFileSync(generatedPath, "utf8"));
-// Without the public-only keys (preview_urls, secrets.required) and the custom build: staging deploys as before.
+// Without the public-only key (preview_urls) and the custom build: staging deploys as before.
 const staging = stripRootOnly(stripPublicOnly(structuredClone(generated)));
 staging.name = name;
 delete staging.routes;

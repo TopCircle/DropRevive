@@ -92,6 +92,11 @@ export function refusalReason(text) {
   return null;
 }
 
+/** Whether a .dev.vars text sets at least one KEY=value (comments and blank values do not count). */
+export function hasActiveVars(text) {
+  return text.split(/\r?\n/).some((line) => /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*\S/.test(line) && !/^\s*#/.test(line));
+}
+
 /** The command the user typed, for the refusal message. */
 export function commandName(event = process.env.npm_lifecycle_event) {
   return event === "deploy:self"
@@ -134,8 +139,8 @@ if (isDirectRun()) {
   // Drop wrangler.jsonc's custom build from the generated config, or `wrangler deploy` builds again.
   const generatedPath = join(root, ".output/server/wrangler.json");
   writeFileSync(generatedPath, JSON.stringify(stripRootOnly(JSON.parse(readFileSync(generatedPath, "utf8"))), null, 2));
-  // wrangler.jsonc declares secrets.required, so a first deploy needs the values up front:
-  // fill .dev.vars from .dev.vars.example and they are uploaded with the Worker.
+  // Every secret is optional. If .dev.vars (from .dev.vars.example) sets any, upload them with the Worker.
   const secretsFile = join(root, ".dev.vars");
-  await run("wrangler", existsSync(secretsFile) ? ["deploy", "--secrets-file", secretsFile] : ["deploy"], root);
+  const upload = existsSync(secretsFile) && hasActiveVars(readFileSync(secretsFile, "utf8"));
+  await run("wrangler", upload ? ["deploy", "--secrets-file", secretsFile] : ["deploy"], root);
 }

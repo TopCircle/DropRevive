@@ -20,6 +20,7 @@ import {
   warnOnce,
   type AllowedOrigins,
 } from "../allowed-origins.ts";
+import { cookieKeyState, envValue } from "../runtime-config.ts";
 
 export type DriveProvider = "google" | "microsoft";
 
@@ -49,7 +50,7 @@ export const GOOGLE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 export const MS_SCOPE = "offline_access User.Read Files.ReadWrite";
 
 const STATE_TTL_S = 600;
-const NOT_CONFIGURED = "服务器还没配好这个网盘的登录（缺少 Worker 密钥）。";
+const NOT_CONFIGURED = "这个网盘还没开通：Worker 上缺少它的客户端 ID / 密钥或 DRIVE_COOKIE_KEY，打开 /setup 查看。";
 const STATE_MISMATCH = "登录页停留太久或在别的窗口打开了，请重新连接。";
 
 /**
@@ -230,9 +231,17 @@ function refreshAad(provider: DriveProvider, name: string, config: DriveAuthConf
   return `${name}|${PROVIDERS[provider].clientId(config) ?? ""}`;
 }
 
+/**
+ * Same rule as runtime-config drivesEnabled: client ID and secret set (not `none`) and a
+ * DRIVE_COOKIE_KEY that decodes to 32 bytes. Anything less is not_configured, never a 500.
+ */
 function configured(provider: DriveProvider, config: DriveAuthConfig): boolean {
   const spec = PROVIDERS[provider];
-  return Boolean(spec.clientId(config) && spec.clientSecret(config) && config.cookieKey);
+  return Boolean(
+    envValue(spec.clientId(config)) &&
+      envValue(spec.clientSecret(config)) &&
+      cookieKeyState(config.cookieKey) === "ok",
+  );
 }
 
 function noStore(headers: Headers): Headers {
@@ -461,7 +470,9 @@ export async function handleDriveAuth(request: Request, config: DriveAuthConfig)
     : parseAllowedOrigins(config.allowedOriginsRaw);
   const malformed = malformedWarning(allowed);
   if (malformed) warnOnce("drive-auth", malformed);
-  if (!isAllowedOrigin(origin, allowed)) {
+  // The broker's own origin is the request URL's: with ALLOWED_ORIGINS unset every address this
+  // Worker is reached on is allowed (same-origin); POSTs also require a same-origin Origin header.
+  if (!isAllowedOrigin(origin, allowed, origin)) {
     warnOnce("drive-auth", refusalReason(origin, allowed));
     return json({ error: "origin_not_allowed" }, 403);
   }

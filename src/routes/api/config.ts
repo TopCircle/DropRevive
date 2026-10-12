@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { serverClientIds } from "@/lib/server-config";
+import { serverClientConfig } from "@/lib/server-config";
 
-// The public OAuth client IDs this Worker uses (never secrets). The page itself gets them
-// during SSR; this is for diagnostics and scripts.
-const handle = () =>
-  Response.json(serverClientIds(), { headers: { "cache-control": "no-store" } });
+// The public OAuth client IDs this Worker uses and which drives are on (never secrets). The
+// page itself gets this during SSR; this is for diagnostics and scripts.
+const handle = ({ request }: { request: Request }) =>
+  Response.json(serverClientConfig(request.url), { headers: { "cache-control": "no-store" } });
 
 export const Route = createFileRoute("/api/config")({
   server: { handlers: { GET: handle } },

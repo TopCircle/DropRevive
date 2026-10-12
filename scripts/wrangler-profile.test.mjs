@@ -8,7 +8,7 @@ import {
   PRODUCTION_WORKER,
   PUBLIC_ONLY_KEYS,
   PUBLIC_WORKER,
-  REQUIRED_SECRETS,
+  CONFIG_SECRETS,
   ROOT_ONLY_KEYS,
   inProductionOrder,
   mergeLikeNitro,
@@ -47,7 +47,8 @@ test("tracked wrangler.jsonc is the public profile: droprevive on workers.dev, n
   assert.equal(tracked.name, PUBLIC_WORKER);
   assert.equal(tracked.workers_dev, true);
   assert.equal(tracked.preview_urls, false);
-  assert.deepEqual(tracked.secrets, { required: REQUIRED_SECRETS });
+  // Deploy first, configure later: no secret is required, so a deploy with none set succeeds.
+  assert.equal(tracked.secrets, undefined);
   assert.equal(tracked.routes, undefined);
   assert.equal(tracked.route, undefined);
   assert.equal(JSON.stringify(tracked).includes(PRODUCTION_HOST), false);
@@ -88,13 +89,13 @@ test("migration tags and Durable Object bindings stay what production already ha
   ]);
 });
 
-test("public profile generates a workers.dev config with preview URLs off and all secrets required", () => {
+test("public profile generates a workers.dev config with preview URLs off and no required secrets", () => {
   const config = publicBuild();
   assert.equal(profileMismatch(config, "public", tracked.migrations), null);
   assert.equal(config.name, PUBLIC_WORKER);
   assert.equal(config.workers_dev, true);
   assert.equal(config.preview_urls, false);
-  assert.deepEqual(config.secrets, { required: REQUIRED_SECRETS });
+  assert.equal("secrets" in config, false);
 });
 
 test("public check accepts the name the button picks (the repo name) but never dropreceive", () => {
@@ -104,7 +105,7 @@ test("public check accepts the name the button picks (the repo name) but never d
   assert.match(profileMismatch({ ...renamed, name: "" }, "public", tracked.migrations) ?? "", /no name/);
 });
 
-test("public check requires workers.dev on, no routes, preview URLs off, every secret declared", () => {
+test("public check requires workers.dev on, no routes, preview URLs off, no required secrets", () => {
   const base = publicBuild();
   for (const workers_dev of [false, undefined]) {
     assert.match(profileMismatch({ ...base, workers_dev }, "public", tracked.migrations) ?? "", /workers_dev/);
@@ -112,11 +113,10 @@ test("public check requires workers.dev on, no routes, preview URLs off, every s
   const routed = { ...base, routes: [{ pattern: "drop.example.com", custom_domain: true }] };
   assert.match(profileMismatch(routed, "public", tracked.migrations) ?? "", /routes/);
   assert.match(profileMismatch({ ...base, preview_urls: true }, "public", tracked.migrations) ?? "", /preview_urls/);
-  const fewer = { ...base, secrets: { required: REQUIRED_SECRETS.slice(1) } };
-  assert.match(profileMismatch(fewer, "public", tracked.migrations) ?? "", /GOOGLE_CLIENT_ID/);
-  const none = { ...base };
-  delete none.secrets;
-  assert.match(profileMismatch(none, "public", tracked.migrations) ?? "", /secrets/);
+  // A declared required secret would make the first deploy fail before anything is configured.
+  for (const secrets of [{ required: CONFIG_SECRETS }, { required: ["ALLOWED_ORIGINS"] }, {}]) {
+    assert.match(profileMismatch({ ...base, secrets }, "public", tracked.migrations) ?? "", /secrets/, JSON.stringify(secrets));
+  }
 });
 
 test("production profile generates dropreceive + custom domain + identical migrations", () => {
@@ -203,17 +203,19 @@ test("mergeLikeNitro follows defu: left wins, objects merge, arrays concatenate"
   assert.deepEqual(mergeLikeNitro({ a: undefined, f: false }, { a: 5, f: true }), { a: 5, f: false });
 });
 
-test(".dev.vars.example declares exactly the required secrets, blank, and is tracked", () => {
+test(".dev.vars.example: every secret listed, all commented out (optional), and tracked", () => {
   const text = readFileSync(new URL("../.dev.vars.example", import.meta.url), "utf8");
   const active = text.split("\n").filter((line) => line.trim() && !line.trim().startsWith("#"));
-  assert.deepEqual(active, REQUIRED_SECRETS.map((name) => `${name}=`));
+  assert.deepEqual(active, [], "nothing active: no secret is required");
+  for (const name of CONFIG_SECRETS) assert.ok(text.includes(`\n# ${name}=\n`), name);
+  assert.match(text, /optional/i);
   // eslint-disable-next-line no-control-regex
   assert.equal(/[^\x00-\x7f]/.test(text), false, "ASCII only");
   const root = new URL("..", import.meta.url).pathname;
   assert.throws(() => execFileSync("git", ["check-ignore", "-q", ".dev.vars.example"], { cwd: root }), "must not be gitignored");
 });
 
-test("package.json: deploy builds, then checks the public profile; every secret has a description", () => {
+test("package.json: deploy builds, then checks the public profile; every secret is described as optional", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   // Builds itself, so the button works even when the dashboard build command is empty.
   assert.equal(pkg.scripts.deploy, "npm run build && node scripts/check-profile.mjs public && wrangler deploy");
@@ -221,6 +223,9 @@ test("package.json: deploy builds, then checks the public profile; every secret 
   // The custom build in wrangler.jsonc must never call back into a deploy script.
   assert.equal(/deploy|wrangler/.test(pkg.scripts.build), false);
   assert.match(pkg.scripts["deploy:production"], /DROP_PROFILE=production .*check-profile\.mjs production && wrangler deploy$/);
-  assert.deepEqual(Object.keys(pkg.cloudflare.bindings).sort(), [...REQUIRED_SECRETS].sort());
-  for (const name of REQUIRED_SECRETS) assert.ok(pkg.cloudflare.bindings[name].description.length > 20, name);
+  assert.deepEqual(Object.keys(pkg.cloudflare.bindings).sort(), [...CONFIG_SECRETS].sort());
+  for (const name of CONFIG_SECRETS) {
+    assert.ok(pkg.cloudflare.bindings[name].description.length > 20, name);
+    assert.match(pkg.cloudflare.bindings[name].description, /Optional/, name);
+  }
 });

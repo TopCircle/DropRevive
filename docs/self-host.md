@@ -4,15 +4,15 @@
 
 You get your own DropRevive on your own Cloudflare account, signing in to Google Drive and/or OneDrive with OAuth apps you own. Cloudflare's free plan is enough. Plan on 20–30 minutes, most of it in the Google and Azure consoles.
 
-**Overview**
+**Deploy first, configure later.** The deploy needs no secrets: right after it the site works and LAN transfer works. Drives turn on as you add their values.
 
-1. [Deploy](#1-deploy) with the button (about 2 minutes).
+1. [Deploy](#1-deploy) with the button (about 2 minutes). Nothing to fill in.
 2. Open `/setup` on your new site and copy the callback URLs.
 3. Create the [Google](#google) and/or [OneDrive (Azure)](#onedrive) app.
-4. Generate the [cookie key](#cookie-key) and set [allowed origins](#allowed-origins).
-5. [Enter the six values](#5-enter-the-values) in Cloudflare, reload `/setup` until it says Ready.
+4. Generate the [cookie key](#cookie-key).
+5. [Enter the values](#5-enter-the-values) in Cloudflare and reload `/setup`. No rebuild.
 
-Only one drive? Skip that drive's section and enter `none` for its two values. The other drive shows as unavailable in the app.
+Every value is optional. A drive is on once its client ID, its client secret and `DRIVE_COOKIE_KEY` are set; until then the app shows it as not configured. Only one drive? Skip the other one's section and leave its two values unset (or `none`). `ALLOWED_ORIGINS` is optional too: unset means only the site's own address is allowed, which covers the workers.dev address and any custom domain.
 
 ## 1. Deploy
 
@@ -20,18 +20,16 @@ Only one drive? Skip that drive's section and enter `none` for its two values. T
 
 1. Sign in to Cloudflare and connect your GitHub (or GitLab) account when asked.
 2. Keep or change the repository name and the Worker name (default `droprevive`).
-3. The form should list six secrets (from `.dev.vars.example`, described in `package.json`). Each one is required. If you do not have a value yet, enter `none`; you will set the real values in step 5. Two you can fill in right away: `DRIVE_COOKIE_KEY` ([generate it](#cookie-key)) and `ALLOWED_ORIGINS` = `https://<worker-name>.<your-subdomain>.workers.dev`. Build command `npm run build` and deploy command `npm run deploy` should be filled in for you. If the build fields are empty (deploy command `npx wrangler deploy`), leave them: `wrangler.jsonc` makes a bare `wrangler deploy` build the site first.
+3. Leave the build settings as they are. If the build fields are empty (deploy command `npx wrangler deploy`), that is fine: `wrangler.jsonc` makes a bare `wrangler deploy` build the site first. No secrets are asked for; you add them after the deploy.
 4. Deploy. Cloudflare creates the repository in your account, builds it, creates the two Durable Objects (LAN transfer rooms and rate limits) and deploys.
-
-**If the form did not ask for the secrets**, or the build log says `The following required secrets have not been set`: open Workers & Pages → your Worker → **Settings → Variables and Secrets**, add all six as type **Secret** (`none` for an unused drive), then **Deployments → Retry build** (or push any commit). `wrangler.jsonc` declares them in `secrets.required`, so a deploy refuses to go out while any is missing instead of shipping a site that cannot sign in.
 
 Your site is `https://<worker-name>.<your-subdomain>.workers.dev` (the subdomain is shown under Workers & Pages in the dashboard). Every push to your copy of the repository redeploys; secrets are kept.
 
-Without the button: clone the repository, `npm ci`, `npx wrangler login`, copy `.dev.vars.example` to `.dev.vars` and fill it in, then `npm run deploy:self` (it uploads `.dev.vars` as the Worker's secrets with `wrangler deploy --secrets-file`).
+Without the button: clone the repository, `npm ci`, `npx wrangler login`, then `npm run deploy:self`. Optionally copy `.dev.vars.example` to `.dev.vars` and uncomment what you already have; it is uploaded as the Worker's secrets (`wrangler deploy --secrets-file`).
 
 ## 2. Open /setup
 
-Open `https://<your-site>/setup`. It shows, for each of the six values, whether it is set (never a secret's value), whether the cookie key is valid, whether this origin is in `ALLOWED_ORIGINS`, and the two callback URLs:
+Open `https://<your-site>/setup`. It shows which drives are on, and for each of the six values whether it is set (never a secret's value; unset shows as "not set (optional)"), whether the cookie key is valid, how `ALLOWED_ORIGINS` applies to this address, and the two callback URLs:
 
 - Google: `https://<your-site>/api/drive-auth/google/callback`
 - Azure: `https://<your-site>/api/drive-auth/microsoft/callback`
@@ -78,41 +76,43 @@ Or in any browser's developer console:
 btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
 ```
 
-`/setup` checks that it decodes to exactly 32 bytes without showing it. Changing it later signs every device out of the drives (they reconnect once).
+Both drives need it: without a valid key (unset, `none`, or not 32 bytes) both stay off; LAN transfer is not affected. `/setup` checks that it decodes to exactly 32 bytes without showing it. Changing it later signs every device out of the drives (they reconnect once).
 
 ## Allowed origins
 
-`ALLOWED_ORIGINS` lists the addresses this Worker serves sign-in and LAN pairing for: full origins, comma-separated, no path or trailing slash. Example:
+Optional. **Unset (or `none`)**: same-origin only. A page may use sign-in and LAN pairing only on the address it was loaded from, so the workers.dev address and any custom domain work with nothing configured. `/setup` shows "not set: same-origin only (current: <origin>)".
+
+**Set**: `ALLOWED_ORIGINS` becomes a strict list of the addresses this Worker serves sign-in and LAN pairing for: full origins, comma-separated, no path or trailing slash. Any address not listed is refused, including the one you are on. Example:
 
 ```
 https://droprevive.you.workers.dev,https://drop.example.com
 ```
 
-When it is missing, sign-in and pairing are refused on every deployed address (fail closed). `/setup` tells you whether the address you opened it on is listed.
+If every entry is malformed (e.g. `drop.example.com` without `https://`), nothing is allowed. This fails closed on purpose so a typo cannot silently widen access. `/setup` flags it; fix the entries or delete the variable.
 
 ## 5. Enter the values
 
-Cloudflare dashboard → **Workers & Pages** → your Worker → **Settings → Variables and Secrets**. Edit each of the six (type **Secret**), then **Deploy** / save. It takes effect immediately; no rebuild. Or from a terminal:
+Cloudflare dashboard → **Workers & Pages** → your Worker → **Settings → Variables and Secrets** → **Add**, type **Secret**, then **Deploy** / save. Add only what you use. It takes effect immediately; no rebuild. Or from a terminal:
 
 ```bash
 npx wrangler secret put GOOGLE_CLIENT_ID --name droprevive
 ```
 
-Reload `/setup`. When it says **Ready**, open the site, Settings, and connect your drive.
+Reload `/setup`. When it lists a drive as on, open the site, Settings, and connect it.
 
-| Secret | From | Only one drive? |
+| Secret | From | Needed for |
 | --- | --- | --- |
-| `GOOGLE_CLIENT_ID` | Google client | `none` if no Google |
-| `GOOGLE_CLIENT_SECRET` | Google client | `none` if no Google |
-| `MS_CLIENT_ID` | Azure app overview | `none` if no OneDrive |
-| `MS_CLIENT_SECRET` | Azure client secret Value | `none` if no OneDrive |
-| `DRIVE_COOKIE_KEY` | [generated](#cookie-key) | required |
-| `ALLOWED_ORIGINS` | your site address(es) | required |
+| `GOOGLE_CLIENT_ID` | Google client | Google Drive (unset or `none` = Google off) |
+| `GOOGLE_CLIENT_SECRET` | Google client | Google Drive |
+| `MS_CLIENT_ID` | Azure app overview | OneDrive (unset or `none` = OneDrive off) |
+| `MS_CLIENT_SECRET` | Azure client secret Value | OneDrive |
+| `DRIVE_COOKIE_KEY` | [generated](#cookie-key) | both drives |
+| `ALLOWED_ORIGINS` | your site address(es) | optional: only to allow other origins ([details](#allowed-origins)) |
 
 ## Your own domain
 
 1. The domain's zone must be on your Cloudflare account. Worker → **Settings → Domains & Routes → Add → Custom domain**, e.g. `drop.example.com`.
-2. Add `https://drop.example.com` to `ALLOWED_ORIGINS` (keep the workers.dev origin too if you still use it).
+2. If you set `ALLOWED_ORIGINS`, add `https://drop.example.com` to it (keep the workers.dev origin too if you still use it). Unset, nothing to do: the new domain is its own origin.
 3. Add the new callback URLs (open `/setup` on the new domain to copy them) to the Google client (plus the JavaScript origin) and to the Azure app.
 4. Optional: to keep the domain and turn off workers.dev for good, edit `wrangler.jsonc` in your copy (`"workers_dev": false` and `"routes": [{ "pattern": "drop.example.com", "custom_domain": true }]`) and push. Otherwise the next build re-enables workers.dev as the file says.
 
@@ -126,9 +126,10 @@ Reload `/setup`. When it says **Ready**, open the site, Settings, and connect yo
 
 | Symptom | Fix |
 | --- | --- |
-| Drive shows "unavailable" | That drive's client ID is missing; see `/setup` |
+| Drive shows "not configured" | Its client ID, its client secret or `DRIVE_COOKIE_KEY` is unset, `none` or invalid; see `/setup` |
+| Build log: `The following required secrets have not been set` | Your copy is from an older version that required secrets. Add the six in **Settings → Variables and Secrets** (`none` for what you do not have yet) and **Retry build**, or update your copy from upstream |
 | `redirect_uri_mismatch` (Google) or `AADSTS50011` (Azure) | The callback URL in the console differs from the one `/setup` shows (scheme, domain, path) |
-| `origin_not_allowed` / sign-in or pairing refused | Add this origin to `ALLOWED_ORIGINS` |
+| `origin_not_allowed` / sign-in or pairing refused (LAN room creation 403) | `ALLOWED_ORIGINS` is set but does not list this address (or has only malformed entries): add it, or delete the variable for same-origin only |
 | Google sign-in lapses after a week | Consent screen still in Testing; publish it |
 | Signed out on every device | `DRIVE_COOKIE_KEY` was changed, or a client secret expired |
 | Build log: `Missing entry-point to Worker script or to assets directory` | The site was not built before `wrangler deploy` (a copy made from an older version of the repository). Workers & Pages → your Worker → **Settings → Build**: set **Deploy command** to `npm run deploy` (it builds, checks and deploys; **Build command** can stay empty or be `npm run build`), save, then **Deployments → Retry build** |

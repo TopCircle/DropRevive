@@ -122,9 +122,42 @@ describe("drive-auth start", () => {
     const location = new URL(response.headers.get("location")!);
     assert.equal(location.origin + location.pathname, `${ORIGIN}/`);
     assert.equal(location.searchParams.get("auth_error"), "not_configured");
-    assert.match(location.searchParams.get("auth_desc")!, /缺少 Worker 密钥/);
+    assert.match(location.searchParams.get("auth_desc")!, /还没开通/);
     assert.equal(location.searchParams.get("p"), "microsoft");
     assert.deepEqual(response.headers.getSetCookie(), []);
+  });
+
+  it("treats none / blank / missing ID, secret or cookie key as not_configured, per drive", async () => {
+    const { fetchMock } = fakeProviders(() => ({ body: {} }));
+    const off: [Partial<DriveAuthConfig>, "google" | "microsoft"][] = [
+      [{ googleClientSecret: "none" }, "google"],
+      [{ googleClientSecret: " NONE " }, "google"],
+      [{ googleClientId: "none" }, "google"],
+      [{ googleClientId: "" }, "google"],
+      [{ msClientSecret: "-" }, "microsoft"],
+      [{ msClientId: undefined }, "microsoft"],
+    ];
+    for (const [change, provider] of off) {
+      const cfg = config(fetchMock, change);
+      const response = await handleDriveAuth(get(`/api/drive-auth/${provider}/start`), cfg);
+      const location = new URL(response.headers.get("location")!);
+      assert.equal(location.searchParams.get("auth_error"), "not_configured", JSON.stringify(change));
+      assert.deepEqual(response.headers.getSetCookie(), []);
+      // The other drive is unaffected.
+      const other = provider === "google" ? "microsoft" : "google";
+      const fine = await handleDriveAuth(get(`/api/drive-auth/${other}/start`), cfg);
+      assert.notEqual(new URL(fine.headers.get("location")!).searchParams.get("auth_error"), "not_configured");
+    }
+    // DRIVE_COOKIE_KEY missing, none or not 32 bytes: both drives off, never a 500.
+    for (const cookieKey of [undefined, "", "none", "c2hvcnQ=", "not base64 !"]) {
+      for (const provider of ["google", "microsoft"] as const) {
+        const response = await handleDriveAuth(get(`/api/drive-auth/${provider}/start`), config(fetchMock, { cookieKey }));
+        assert.equal(response.status, 302, String(cookieKey));
+        assert.equal(new URL(response.headers.get("location")!).searchParams.get("auth_error"), "not_configured");
+      }
+      const token = await handleDriveAuth(post("/api/drive-auth/token", new Jar()), config(fetchMock, { cookieKey }));
+      assert.equal(token.status, 200);
+    }
   });
 
   it("uses plain cookie names and no Secure flag on http://localhost:8080", async () => {
@@ -415,7 +448,7 @@ describe("drive-auth token", () => {
     assert.notEqual(listed.status, 403);
   });
 
-  it("reads ALLOWED_ORIGINS from allowedOriginsRaw and fails closed when missing", async () => {
+  it("reads ALLOWED_ORIGINS from allowedOriginsRaw: a set list is strict", async () => {
     const { fetchMock } = fakeProviders(() => ({ body: {} }));
     const withVar = config(fetchMock, {
       origins: undefined,
@@ -428,16 +461,32 @@ describe("drive-auth token", () => {
     const denied = await handleDriveAuth(new Request("https://evil.example/api/drive-auth/google/start"), withVar);
     assert.equal(denied.status, 403);
 
-    const missing = config(fetchMock, { origins: undefined, allowedOriginsRaw: undefined });
-    const refused = await handleDriveAuth(new Request("https://staging.example.com/api/drive-auth/google/start"), missing);
-    assert.equal(refused.status, 403);
-    assert.deepEqual(await refused.json(), { error: "origin_not_allowed" });
-    // Local dev still works without the variable.
-    const local = await handleDriveAuth(new Request("http://localhost:8080/api/drive-auth/google/start"), missing);
+    // Local dev works too.
+    const local = await handleDriveAuth(new Request("http://localhost:8080/api/drive-auth/google/start"), withVar);
     assert.notEqual(local.status, 403);
   });
 
-  it("ignores malformed ALLOWED_ORIGINS entries instead of opening the Worker", async () => {
+  it("ALLOWED_ORIGINS unset, empty or none: same-origin only", async () => {
+    const { fetchMock } = fakeProviders(() => ({ body: { access_token: "AT", refresh_token: "RT" } }));
+    for (const allowedOriginsRaw of [undefined, null, "", "none", " None "]) {
+      const cfg = config(fetchMock, { origins: undefined, allowedOriginsRaw });
+      // Any address this Worker is reached on (workers.dev or a custom domain) serves itself.
+      for (const host of [ORIGIN, "https://droprevive.someone.workers.dev", "https://drop.custom.example"]) {
+        const start = await handleDriveAuth(get("/api/drive-auth/google/start", undefined, host), cfg);
+        assert.equal(start.status, 302, `${allowedOriginsRaw} ${host}`);
+      }
+      // Full sign-in and token refresh with a same-origin POST.
+      const { jar } = await connect("google", cfg);
+      const token = await handleDriveAuth(post("/api/drive-auth/token?p=google", jar), cfg);
+      assert.equal(token.status, 200);
+      assert.equal((await token.json()).google.access_token, "AT");
+      // A cross-origin POST is still refused.
+      const cross = await handleDriveAuth(post("/api/drive-auth/token", jar, { origin: "https://evil.example", "sec-fetch-site": "cross-site" }), cfg);
+      assert.equal(cross.status, 403);
+    }
+  });
+
+  it("a list of only malformed ALLOWED_ORIGINS entries fails closed (not same-origin)", async () => {
     const { fetchMock } = fakeProviders(() => ({ body: {} }));
     const cfg = config(fetchMock, {
       origins: undefined,
@@ -479,10 +528,10 @@ describe("drive-auth logout and sealing", () => {
     console.log(`# MS-sized cookie: token ${bigToken.length} B -> Set-Cookie ${header.length} B`);
   });
 
-  it("refuses a DRIVE_COOKIE_KEY that is not 32 bytes", async () => {
+  it("a DRIVE_COOKIE_KEY that is not 32 bytes leaves the drives off (not_configured, not a 500)", async () => {
     const { fetchMock } = fakeProviders(() => ({ body: {} }));
     const response = await handleDriveAuth(get("/api/drive-auth/google/start"), config(fetchMock, { cookieKey: "c2hvcnQ=" }));
-    assert.equal(response.status, 500);
-    assert.equal((await response.json()).error, "server_error");
+    assert.equal(response.status, 302);
+    assert.equal(new URL(response.headers.get("location")!).searchParams.get("auth_error"), "not_configured");
   });
 });

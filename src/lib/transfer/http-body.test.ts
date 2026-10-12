@@ -201,3 +201,36 @@ test("a 40-character name and a name up to the raw bound still pass through to t
   assert.equal((await handleTransferRequest(post("/api/transfer", JSON.stringify({ deviceName: long })), env)).status, 200);
   assert.deepEqual(calls.created, [forty, long]);
 });
+
+/** POST /api/transfer to `site` with Origin `origin`, under a given ALLOWED_ORIGINS value. */
+async function createStatus(allowed: string | undefined, site: string, origin: string | null): Promise<number> {
+  const { env } = fakeEnv();
+  env.ALLOWED_ORIGINS = allowed;
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (origin !== null) headers.origin = origin;
+  const response = await handleTransferRequest(
+    new Request(`${site}/api/transfer`, { method: "POST", headers, body: JSON.stringify({ deviceName: "a" }) }),
+    env,
+  );
+  return response.status;
+}
+
+test("ALLOWED_ORIGINS unset, empty or none: room creation is same-origin only", async () => {
+  const workersDev = "https://droprevive-test4.someone.workers.dev";
+  const custom = "https://drop.custom.example";
+  for (const allowed of [undefined, "", "none", " NONE "]) {
+    assert.equal(await createStatus(allowed, workersDev, workersDev), 200, `${allowed} workers.dev`);
+    assert.equal(await createStatus(allowed, custom, custom), 200, `${allowed} custom domain`);
+    assert.equal(await createStatus(allowed, workersDev, "https://evil.example"), 403);
+    assert.equal(await createStatus(allowed, workersDev, "http://droprevive-test4.someone.workers.dev"), 403);
+    assert.equal(await createStatus(allowed, workersDev, null), 403);
+  }
+});
+
+test("ALLOWED_ORIGINS set: strict list (and still same host); malformed-only fails closed", async () => {
+  assert.equal(await createStatus(ORIGIN, ORIGIN, ORIGIN), 200);
+  const other = "https://droprevive.someone.workers.dev";
+  assert.equal(await createStatus(ORIGIN, other, other), 403, "same-origin but not listed");
+  assert.equal(await createStatus(`${ORIGIN},${other}`, other, ORIGIN), 403, "listed but not the same host");
+  assert.equal(await createStatus("staging.example.com,https://staging.example.com/x", ORIGIN, ORIGIN), 403);
+});

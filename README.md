@@ -66,36 +66,38 @@ If UI language was never saved: browser languages starting with `zh` get Chinese
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/TopCircle/DropRevive)
 
-The button copies this repository into your GitHub account, builds it with Workers Builds and deploys a Worker named `droprevive` on `workers.dev` with its two Durable Objects. Every push to your copy redeploys. Then:
+The button copies this repository into your GitHub account, builds it with Workers Builds and deploys a Worker named `droprevive` on `workers.dev` with its two Durable Objects. Every push to your copy redeploys. Deploy first, configure later: the deploy asks for no secrets, and the site and LAN transfer work right away. Drives turn on as you add their values:
 
-1. Open `https://droprevive.<your-subdomain>.workers.dev/setup`. It lists the six Worker secrets as set or missing (never their values), checks the cookie key, checks that this origin is in `ALLOWED_ORIGINS`, and shows the exact callback URLs to register.
-2. Create a Google OAuth client and/or an Azure app with those callback URLs. Only one drive is fine: enter `none` for the other drive's two values.
-3. Put the six values into Workers > your Worker > Settings > Variables and Secrets (or `npx wrangler secret put NAME`). Saving takes effect without a rebuild; reload `/setup` until it says Ready.
+1. Open `https://droprevive.<your-subdomain>.workers.dev/setup`. It shows which drives are on, lists the six optional Worker secrets as set or not set (never their values), checks the cookie key, shows how `ALLOWED_ORIGINS` applies to this origin, and shows the exact callback URLs to register.
+2. Create a Google OAuth client and/or an Azure app with those callback URLs. Only one drive is fine: leave the other drive's two values unset (or `none`).
+3. Add the values you have under Workers > your Worker > Settings > Variables and Secrets (or `npx wrangler secret put NAME`). Saving takes effect without a rebuild; reload `/setup` until it lists your drive as on.
 
 Step-by-step guide, including your own domain and key rotation: [docs/self-host.md](docs/self-host.md) ([中文](docs/self-host.zh-CN.md)).
 
+All optional. A drive is on only when its client ID, its client secret and `DRIVE_COOKIE_KEY` are all set (unset or `none` = off); LAN transfer needs none of them.
+
 | Worker secret | What | Notes |
 | --- | --- | --- |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID | Public value. `none` if you do not use Google Drive |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | `none` if you do not use Google Drive |
-| `MS_CLIENT_ID` | Azure application (client) ID | Public value. `none` if you do not use OneDrive |
-| `MS_CLIENT_SECRET` | Azure client secret value | Expires within 24 months. `none` if you do not use OneDrive |
-| `DRIVE_COOKIE_KEY` | AES-GCM key for refresh-token cookies | 32 random bytes, base64: `openssl rand -base64 32` |
-| `ALLOWED_ORIGINS` | Origins allowed for sign-in and LAN pairing | Comma-separated, e.g. `https://droprevive.you.workers.dev,https://drop.example.com`. Missing → refused (fail closed) |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | Public value. Unset if you do not use Google Drive |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | Unset if you do not use Google Drive |
+| `MS_CLIENT_ID` | Azure application (client) ID | Public value. Unset if you do not use OneDrive |
+| `MS_CLIENT_SECRET` | Azure client secret value | Expires within 24 months. Unset if you do not use OneDrive |
+| `DRIVE_COOKIE_KEY` | AES-GCM key for refresh-token cookies | 32 random bytes, base64: `openssl rand -base64 32`. Both drives need it |
+| `ALLOWED_ORIGINS` | Origins allowed for sign-in and LAN pairing | Optional. Unset or `none`: same-origin only (the site's own address, workers.dev or custom domain). Set: a strict comma-separated list, e.g. `https://droprevive.you.workers.dev,https://drop.example.com`. Only malformed entries → everything refused (fail closed) |
 
-The list is also in [`.dev.vars.example`](.dev.vars.example); the button reads it to ask for each secret.
+The list is also in [`.dev.vars.example`](.dev.vars.example), a commented template for local development.
 
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Local dev at <http://localhost:8080> (localhost only; `HOST=0.0.0.0 npm run dev` for your LAN). Reads the six settings from the environment; without client IDs, drives show as unavailable |
 | `npm run build` | Build the public profile into `.output/` (Worker `droprevive`, `workers.dev`, no route) |
-| `npm run deploy` | Builds, checks the build is the public profile (workers.dev on, no route, not `dropreceive`), then `wrangler deploy`. This is what the button runs; it builds first, so it works even when the dashboard build command is empty. Refuses while any of the six secrets is unset on the Worker (`secrets.required`) |
+| `npm run deploy` | Builds, checks the build is the public profile (workers.dev on, no route, not `dropreceive`), then `wrangler deploy`. This is what the button runs; it builds first, so it works even when the dashboard build command is empty. Needs no secrets |
 | `npm run deploy:self` | Build and deploy from your own machine. Refuses while the Worker is named `dropreceive` or a route points at `drop.habor.dpdns.org`; a `workers.dev`-only Worker or your own domain is fine |
 | `npm run deploy:production` | Maintainers only: builds the production profile (`DROP_PROFILE=production`, Worker `dropreceive`, custom domain `drop.habor.dpdns.org`) and checks the generated config before deploying |
 
-Without the button: fork or clone, `npx wrangler login`, `npm ci`, copy `.dev.vars.example` to `.dev.vars` and fill it in, then `npm run deploy:self` (uploads `.dev.vars` as the Worker's secrets).
+Without the button: fork or clone, `npx wrangler login`, `npm ci`, then `npm run deploy:self`. Optionally copy `.dev.vars.example` to `.dev.vars` and uncomment what you have; it is uploaded as the Worker's secrets.
 
-If the deploy form did not ask for the secrets, or the build log says they are missing: add all six in Worker → Settings → Variables and Secrets, then retry the build.
+A copy made from an older version may still fail with `The following required secrets have not been set`: add the six in Worker → Settings → Variables and Secrets (`none` for what you do not have yet) and retry the build, or update the copy from upstream.
 
 For real sign-in locally, register `http://localhost:8080/api/drive-auth/google/callback` and `http://localhost:8080/api/drive-auth/microsoft/callback`, then run `npm run dev` with the settings in the environment. `ALLOWED_ORIGINS` is optional locally (`http://localhost:8080` is built in).
 
@@ -105,7 +107,7 @@ Maintainer client IDs are registered only for `https://drop.habor.dpdns.org`. Th
 
 - [Contributing](CONTRIBUTING.md) · [Architecture](docs/architecture.md) ([中文](docs/architecture.zh-CN.md)) · [Security policy](SECURITY.md)
 - GitHub Actions runs typecheck, tests, lint and build on pushes and pull requests. CI does not use deployment secrets.
-- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and LAN rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 26 script tests plus 278 others; lint is kept at 0 errors and 0 warnings.
+- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and LAN rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 31 script tests plus 291 others; lint is kept at 0 errors and 0 warnings.
 - Community and questions: the project's Telegram group, <https://t.me/droprevive>. Report security problems privately, see [SECURITY.md](SECURITY.md).
 - `wrangler.jsonc` is the public profile. The production site is a build profile in `scripts/wrangler-profile.mjs`; `npm test` checks that the public, production and staging configs come out as expected.
 

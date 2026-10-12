@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   LOCAL_DEV_ORIGINS,
+  allowedMode,
   isAllowedOrigin,
   malformedWarning,
   parseAllowedOrigins,
@@ -9,8 +10,8 @@ import {
 } from "./allowed-origins.ts";
 
 describe("parseAllowedOrigins", () => {
-  it("treats missing and blank as empty (fail closed)", () => {
-    for (const raw of [undefined, null, "", "  ", ",,,"]) {
+  it("treats missing, blank and none as unset (same-origin only)", () => {
+    for (const raw of [undefined, null, "", "  ", ",,,", "none", " NONE ", "-"]) {
       const parsed = parseAllowedOrigins(raw as string | null | undefined);
       assert.equal(parsed.missing, true);
       assert.deepEqual(parsed.origins, []);
@@ -56,6 +57,36 @@ describe("isAllowedOrigin", () => {
     assert.equal(isAllowedOrigin("https://staging.example.com", allowed), true);
     assert.equal(isAllowedOrigin("https://evil.example", allowed), false);
     assert.equal(isAllowedOrigin("http://localhost:8080", allowed), true);
+  });
+});
+
+describe("isAllowedOrigin with the site's own origin", () => {
+  const site = "https://droprevive.someone.workers.dev";
+  it("unset: allows exactly the request URL's origin, nothing else", () => {
+    for (const raw of [undefined, "", "none"]) {
+      const allowed = parseAllowedOrigins(raw);
+      assert.equal(allowedMode(allowed), "same-origin");
+      assert.equal(isAllowedOrigin(site, allowed, site), true);
+      assert.equal(isAllowedOrigin("https://drop.custom.example", allowed, "https://drop.custom.example"), true);
+      assert.equal(isAllowedOrigin("https://evil.example", allowed, site), false);
+      assert.equal(isAllowedOrigin("http://droprevive.someone.workers.dev", allowed, site), false);
+      assert.equal(isAllowedOrigin(site, allowed), false, "no site origin given: nothing but local dev");
+    }
+  });
+
+  it("set: the strict list, even for the site's own origin", () => {
+    const allowed = parseAllowedOrigins("https://drop.example.com");
+    assert.equal(allowedMode(allowed), "list");
+    assert.equal(isAllowedOrigin("https://drop.example.com", allowed, "https://drop.example.com"), true);
+    assert.equal(isAllowedOrigin(site, allowed, site), false);
+  });
+
+  it("only malformed entries: fails closed, even same-origin", () => {
+    const allowed = parseAllowedOrigins("droprevive.someone.workers.dev,https://x.example/path");
+    assert.equal(allowedMode(allowed), "malformed");
+    assert.equal(allowed.missing, false);
+    assert.equal(isAllowedOrigin(site, allowed, site), false);
+    assert.equal(isAllowedOrigin("http://localhost:8080", allowed, site), true);
   });
 });
 

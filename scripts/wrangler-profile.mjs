@@ -15,8 +15,11 @@ export const PRODUCTION_HOST = "drop.habor.dpdns.org";
 export const PUBLIC_WORKER = "droprevive";
 export const PROFILE_VAR = "DROP_PROFILE";
 
-/** Worker secrets the app reads; the Deploy to Cloudflare form asks for each (wrangler.jsonc secrets.required). */
-export const REQUIRED_SECRETS = [
+/**
+ * Worker secrets the app reads. All optional (deploy first, configure later): wrangler.jsonc
+ * declares none as required; .dev.vars.example and package.json "cloudflare.bindings" describe them.
+ */
+export const CONFIG_SECRETS = [
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
   "MS_CLIENT_ID",
@@ -28,7 +31,7 @@ export const REQUIRED_SECRETS = [
 /**
  * Keys in wrangler.jsonc that only the public (button / self-host) profile uses. The maintainer's
  * production and staging deploys drop them, so their generated config stays what it was before the
- * button existed (production does not have every required secret set yet).
+ * button existed. (`secrets` is listed too: no profile may declare required secrets.)
  */
 export const PUBLIC_ONLY_KEYS = ["preview_urls", "secrets"];
 
@@ -158,7 +161,7 @@ function patterns(routes) {
  * `expectedMigrations` is the migrations list of the tracked wrangler.jsonc.
  *
  * public: any Worker name except the maintainer's (the button renames it to the repository name),
- *   workers.dev on, preview URLs off, no routes, every required secret declared.
+ *   workers.dev on, preview URLs off, no routes, no required secrets (a deploy must work with none set).
  * production: dropreceive, workers.dev off, exactly the custom domain, no public-only keys.
  * staging: the given name, workers.dev on, no routes, no public-only keys.
  * @param {Record<string, any>} config
@@ -201,8 +204,6 @@ export function profileMismatch(config, profile, expectedMigrations, stagingName
     return extra.length ? `staging must not carry ${extra.join(", ")}` : null;
   }
   if (config.preview_urls !== false) return "preview_urls must be false";
-  const declared = Array.isArray(config.secrets?.required) ? [...config.secrets.required].sort() : [];
-  const missing = REQUIRED_SECRETS.filter((secret) => !declared.includes(secret));
-  if (missing.length) return `secrets.required is missing ${missing.join(", ")}`;
+  if ("secrets" in config) return "must not declare secrets (deploy first, configure later: every secret is optional)";
   return null;
 }

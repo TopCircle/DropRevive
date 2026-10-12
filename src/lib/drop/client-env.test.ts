@@ -20,3 +20,19 @@ test("a missing config (loader failed) keeps the current values", () => {
   assert.equal(env.GOOGLE_CLIENT_ID, "g");
   assert.equal(env.MS_CLIENT_ID, "m");
 });
+
+test("a drive with an ID but not enabled on the Worker shows as not configured, keeping its ID", () => {
+  env.applyClientConfig({
+    googleClientId: "g",
+    msClientId: "m",
+    googleEnabled: false,
+    msEnabled: true,
+  });
+  assert.equal(env.GOOGLE_CLIENT_ID, "g");
+  assert.equal(env.googleConfigured, false);
+  assert.equal(env.microsoftConfigured, true);
+  // Without flags (an older Worker): an ID means configured, as before.
+  env.applyClientConfig({ googleClientId: "g", msClientId: "" });
+  assert.equal(env.googleConfigured, true);
+  assert.equal(env.microsoftConfigured, false);
+});

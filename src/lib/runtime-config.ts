@@ -4,8 +4,10 @@
  * the Worker's GOOGLE_CLIENT_ID / MS_CLIENT_ID, with the build values kept as a fallback so
  * a build made the old way keeps working unchanged.
  *
- * "none" (any case) or "-" counts as not set: the Deploy to Cloudflare form asks for every
- * secret, so a self-hoster using only one drive types "none" for the other.
+ * Every setting is optional, so a fresh deploy works with none of them ("deploy first, configure
+ * later"). "none" (any case) or "-" counts as not set. A drive is on only when its client ID,
+ * its client secret and a valid DRIVE_COOKIE_KEY are all set (drivesEnabled); LAN transfer
+ * needs none of them.
  *
  * No framework or `@/` imports so node --test, the routes and server functions can share it.
  */
@@ -54,6 +56,25 @@ export function cookieKeyState(raw: string | null | undefined): CookieKeyState {
     return "invalid";
   }
 }
+
+export type DriveFlags = { google: boolean; microsoft: boolean };
+
+/**
+ * Which drives this Worker can sign in to: client ID (Worker or build value) + client secret +
+ * a 32-byte DRIVE_COOKIE_KEY. The cookie key seals both drives' refresh tokens, so without a
+ * valid one both are off. The drive-auth broker (oauth.server.ts) applies the same rule.
+ */
+export function drivesEnabled(env: ConfigEnv, build: BuildClientIds = {}): DriveFlags {
+  const ids = resolveClientIds(env, build);
+  const cookie = cookieKeyState(env.DRIVE_COOKIE_KEY) === "ok";
+  return {
+    google: cookie && Boolean(ids.googleClientId) && Boolean(envValue(env.GOOGLE_CLIENT_SECRET)),
+    microsoft: cookie && Boolean(ids.msClientId) && Boolean(envValue(env.MS_CLIENT_SECRET)),
+  };
+}
+
+/** What the page gets: the public IDs plus whether each drive can actually sign in here. */
+export type ClientConfig = ClientIds & { googleEnabled: boolean; msEnabled: boolean };
 
 /** Only the keys this app reads, from `process.env` (Workers) or any record. */
 export function pickConfigEnv(source: Record<string, string | undefined>): ConfigEnv {

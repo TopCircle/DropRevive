@@ -10,13 +10,20 @@ export let MS_CLIENT_ID = (import.meta.env?.VITE_MS_CLIENT_ID ?? "").trim();
 export let googleConfigured = GOOGLE_CLIENT_ID.length > 0;
 export let microsoftConfigured = MS_CLIENT_ID.length > 0;
 
-/** Use the IDs the Worker resolved (Worker value, else build value). Empty means not configured. */
-export function applyClientConfig(config: { googleClientId?: string; msClientId?: string } | null | undefined): void {
+/**
+ * Use what the Worker resolved: the IDs (Worker value, else build value) and whether each drive
+ * can sign in (ID + secret + cookie key + origin; runtime-config drivesEnabled). A drive whose ID
+ * is known but is not enabled keeps its ID, so a stored session still matches once it is enabled
+ * again, but shows as not configured. Missing flags (an older Worker) mean "enabled if it has an ID".
+ */
+export function applyClientConfig(
+  config: { googleClientId?: string; msClientId?: string; googleEnabled?: boolean; msEnabled?: boolean } | null | undefined,
+): void {
   if (!config) return;
   GOOGLE_CLIENT_ID = (config.googleClientId ?? "").trim();
   MS_CLIENT_ID = (config.msClientId ?? "").trim();
-  googleConfigured = GOOGLE_CLIENT_ID.length > 0;
-  microsoftConfigured = MS_CLIENT_ID.length > 0;
+  googleConfigured = GOOGLE_CLIENT_ID.length > 0 && config.googleEnabled !== false;
+  microsoftConfigured = MS_CLIENT_ID.length > 0 && config.msEnabled !== false;
 }
 
 export const GOOGLE_SCOPE = "https://www.googleapis.com/auth/drive.file";

@@ -42,3 +42,19 @@ test("pickConfigEnv keeps only the six settings", () => {
   ]);
   assert.equal(env.GOOGLE_CLIENT_ID, "g");
 });
+
+test("drivesEnabled: each drive needs its ID and secret; DRIVE_COOKIE_KEY gates both", async () => {
+  const { drivesEnabled } = await import("./runtime-config.ts");
+  const full = { GOOGLE_CLIENT_ID: "g", GOOGLE_CLIENT_SECRET: "gs", MS_CLIENT_ID: "m", MS_CLIENT_SECRET: "ms", DRIVE_COOKIE_KEY: KEY };
+  assert.deepEqual(drivesEnabled(full), { google: true, microsoft: true });
+  assert.deepEqual(drivesEnabled({}), { google: false, microsoft: false });
+  assert.deepEqual(drivesEnabled({ ...full, GOOGLE_CLIENT_SECRET: "None" }), { google: false, microsoft: true });
+  assert.deepEqual(drivesEnabled({ ...full, MS_CLIENT_ID: " none " }), { google: true, microsoft: false });
+  for (const DRIVE_COOKIE_KEY of [undefined, "none", "short"]) {
+    assert.deepEqual(drivesEnabled({ ...full, DRIVE_COOKIE_KEY }), { google: false, microsoft: false });
+  }
+  // Build-time ID counts as the ID; the secret still has to be on the Worker.
+  const { GOOGLE_CLIENT_ID: _g, ...noGoogleId } = full;
+  assert.deepEqual(drivesEnabled(noGoogleId, { google: "g-build" }), { google: true, microsoft: true });
+  assert.deepEqual(drivesEnabled({ DRIVE_COOKIE_KEY: KEY }, { google: "g-build", microsoft: "m-build" }), { google: false, microsoft: false });
+});

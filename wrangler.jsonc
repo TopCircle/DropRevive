@@ -14,19 +14,9 @@
   "workers_dev": true,
   // Durable Object Workers get no version preview URLs anyway; keep the dashboard state explicit.
   "preview_urls": false,
-  // The Deploy to Cloudflare form asks for these (descriptions: package.json "cloudflare.bindings";
-  // template: .dev.vars.example). `wrangler deploy` refuses while any is unset on the Worker.
-  // Enter `none` for a drive you do not use. See docs/self-host.md.
-  "secrets": {
-    "required": [
-      "GOOGLE_CLIENT_ID",
-      "GOOGLE_CLIENT_SECRET",
-      "MS_CLIENT_ID",
-      "MS_CLIENT_SECRET",
-      "DRIVE_COOKIE_KEY",
-      "ALLOWED_ORIGINS"
-    ]
-  },
+  // No required secrets: deploy first, configure later. The six optional Worker secrets
+  // (.dev.vars.example, docs/self-host.md) are added in the dashboard after the first deploy;
+  // /setup shows which are set. LAN transfer works with none of them.
   "durable_objects": {
     "bindings": [
       { "name": "TRANSFER_ROOM", "class_name": "TransferRoom" },

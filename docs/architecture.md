@@ -61,7 +61,7 @@ Key points:
 - The Worker does three things: serve pages; exchange tokens with Google / Microsoft for the browser (the client-secret step); and LAN pairing / signaling.
 - There is no database. Sign-in state is an encrypted cookie in the browser. Durable Objects hold only transfer rooms (code, both sides' random tokens and device names; expire after 10 minutes unpaired, session max 2 hours) and one-minute rate-limit counters.
 - LAN `RTCPeerConnection` uses `iceServers: []` — no STUN, no TURN — so peers must be able to reach each other directly (same LAN). Guest Wi-Fi isolation, VPN, and cellular fail; the UI steers users to cloud drop.
-- `npm run dev` (Vite) has no Durable Objects; `/api/transfer` returns 404. Try LAN transfer only on a deployed Worker whose `ALLOWED_ORIGINS` secret lists that site's origin.
+- `npm run dev` (Vite) has no Durable Objects; `/api/transfer` returns 404. Try LAN transfer only on a deployed Worker (with `ALLOWED_ORIGINS` unset it works on the Worker's own origin; when set, it must list that origin).
 
 ## 2. Sign-in and refresh
 
@@ -118,7 +118,7 @@ sequenceDiagram
 
 Notes:
 
-- Allowed origins come from Worker secret `ALLOWED_ORIGINS` (comma-separated full origins). Missing or empty refuses deployed hosts; `http://localhost:8080` stays open for local `npm run dev`. `redirect_uri` uses the request's own origin, so each deployment returns to its own host.
+- Allowed origins come from the optional Worker secret `ALLOWED_ORIGINS` (comma-separated full origins). Unset, empty or `none`: same-origin only (a request's origin must equal the request URL's origin, which covers workers.dev and any custom domain). Set: a strict list. Only malformed entries: everything refused (fail closed). `http://localhost:8080` stays open for local `npm run dev`. A drive is on only when its client ID, client secret and a 32-byte `DRIVE_COOKIE_KEY` are set; otherwise its endpoints answer `not_configured`. `redirect_uri` uses the request's own origin, so each deployment returns to its own host.
 - On `http://localhost`, cookies omit the `__Secure-` prefix and the `Secure` flag.
 - Provider errors on the callback are mapped to fixed copy; the provider's raw text is not returned to the page.
 - "Disconnect" clears only this device's cookie; it does not revoke at the provider. To revoke everywhere, use Google / Microsoft account permissions (links on `/privacy`).
@@ -195,7 +195,7 @@ Sync requests that arrive during a run share it and queue exactly one more pass.
 
 ## 6. LAN transfer: HTTP entry and the in-page scanner
 
-`server/transfer-http.ts` is the only HTTP entry for LAN pairing. It checks the request origin against `ALLOWED_ORIGINS`, rejects a declared `Content-Length` over the cap before reading, reads the body as a stream and cancels it once it passes the cap (so chunked or under-declared bodies are never buffered whole), and validates the parsed JSON: it must be a plain object, `deviceName` and `code` must be strings of the allowed shape, and unknown extra keys are ignored. Oversized requests get 413, malformed ones 400, and nothing in this path should produce a 500.
+`server/transfer-http.ts` is the only HTTP entry for LAN pairing. It checks the request origin (same host as the request, then `ALLOWED_ORIGINS` or, when unset, same-origin), rejects a declared `Content-Length` over the cap before reading, reads the body as a stream and cancels it once it passes the cap (so chunked or under-declared bodies are never buffered whole), and validates the parsed JSON: it must be a plain object, `deviceName` and `code` must be strings of the allowed shape, and unknown extra keys are ignored. Oversized requests get 413, malformed ones 400, and nothing in this path should produce a 500.
 
 ```mermaid
 flowchart LR
