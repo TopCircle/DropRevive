@@ -37,6 +37,7 @@ export type SessionEvent =
   | { type: "notice"; at: number; tone: NoticeTone; text: string }
   | { type: "clear-reconnect" }
   | { type: "clear-end" }
+  | { type: "clear-stale" }
   | { type: "fail-open" };
 
 const OPEN_STATUS: BatchStatus[] = ["waiting", "confirm", "transfer"];
@@ -98,6 +99,10 @@ export function reduceTimeline(entries: TimelineEntry[], event: SessionEvent): T
   }
   if (event.type === "clear-reconnect") {
     return entries.filter((entry) => entry.kind !== "notice" || entry.tone !== "reconnect");
+  }
+  if (event.type === "clear-stale") {
+    // A failure or an ended session from an earlier attempt must not linger once a new one starts or connects.
+    return entries.filter((entry) => entry.kind !== "notice" || (entry.tone !== "fail" && entry.tone !== "end"));
   }
   if (event.type === "clear-end") {
     return entries.filter((entry) => entry.kind !== "notice" || entry.tone !== "end");
