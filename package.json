@@ -22,12 +22,12 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "deploy": "node scripts/deploy-self.mjs",
-    "deploy:production": "VITE_GOOGLE_CLIENT_ID=707937606664-s6eipc0mvraf5pio6ukg1v3e61rhgs5a.apps.googleusercontent.com VITE_MS_CLIENT_ID=a367fd71-6087-4269-a942-2abf2694f8a1 npm run build && wrangler deploy",
+    "deploy": "npm run build && node scripts/check-profile.mjs public && wrangler deploy",
+    "deploy:production": "DROP_PROFILE=production VITE_GOOGLE_CLIENT_ID=707937606664-s6eipc0mvraf5pio6ukg1v3e61rhgs5a.apps.googleusercontent.com VITE_MS_CLIENT_ID=a367fd71-6087-4269-a942-2abf2694f8a1 npm run build && node scripts/check-profile.mjs production && wrangler deploy",
     "deploy:staging": "VITE_GOOGLE_CLIENT_ID=707937606664-s6eipc0mvraf5pio6ukg1v3e61rhgs5a.apps.googleusercontent.com VITE_MS_CLIENT_ID=a367fd71-6087-4269-a942-2abf2694f8a1 npm run build && node scripts/deploy-staging.mjs",
     "deploy:self": "node scripts/deploy-self.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/allowed-origins.test.ts src/lib/pwa-manifest.test.ts src/lib/links.test.ts src/lib/drop/oauth.server.test.ts src/lib/drop/drive-session.test.ts src/lib/drop/reconcile.test.ts src/lib/drop/store.test.ts src/lib/drop/store.sync.test.ts src/lib/drop/net-retry.test.ts src/lib/drop/http.test.ts src/components/drop/use-stick-to-bottom.test.ts src/components/drop/back-layer.test.ts src/components/drop/use-long-press.test.ts src/components/drop/overlay-scrollbar-core.test.ts src/lib/drop/multi-select.test.ts src/lib/drop/search-groups.test.ts src/lib/drop/desktop-search.test.ts src/lib/drop/scroll-edges.test.ts src/lib/transfer/*.test.ts server/transfer-room.integration.test.mjs",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/allowed-origins.test.ts src/lib/runtime-config.test.ts src/lib/setup-status.test.ts src/lib/drop/client-env.test.ts src/lib/pwa-manifest.test.ts src/lib/links.test.ts src/lib/i18n/rich.test.ts src/lib/drop/oauth.server.test.ts src/lib/drop/drive-session.test.ts src/lib/drop/reconcile.test.ts src/lib/drop/store.test.ts src/lib/drop/store.sync.test.ts src/lib/drop/net-retry.test.ts src/lib/drop/http.test.ts src/components/drop/use-stick-to-bottom.test.ts src/components/drop/back-layer.test.ts src/components/drop/use-long-press.test.ts src/components/drop/overlay-scrollbar-core.test.ts src/lib/drop/multi-select.test.ts src/lib/drop/search-groups.test.ts src/lib/drop/desktop-search.test.ts src/lib/drop/scroll-edges.test.ts src/lib/transfer/*.test.ts server/transfer-room.integration.test.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
@@ -104,5 +104,27 @@
     "typescript-eslint": "^8.56.1",
     "vite": "^8.2.0",
     "wrangler": "4.149.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "GOOGLE_CLIENT_ID": {
+        "description": "可选，部署后再设 / Optional, set it after deploy: Google OAuth 客户端 ID / client ID (`….apps.googleusercontent.com`). 不用 Google 就不填 / Leave empty if you do not use Google. [docs/self-host.md](https://github.com/TopCircle/DropRevive/blob/main/docs/self-host.md#google)"
+      },
+      "GOOGLE_CLIENT_SECRET": {
+        "description": "可选，部署后再设 / Optional, set it after deploy: Google OAuth 客户端密钥 / client secret. 不用 Google 就不填 / Leave empty if you do not use Google. [docs/self-host.md](https://github.com/TopCircle/DropRevive/blob/main/docs/self-host.md#google)"
+      },
+      "MS_CLIENT_ID": {
+        "description": "可选，部署后再设 / Optional, set it after deploy: Azure 应用（客户端）ID / application (client) ID. 不用 OneDrive 就不填 / Leave empty if you do not use OneDrive. [docs/self-host.md](https://github.com/TopCircle/DropRevive/blob/main/docs/self-host.md#onedrive)"
+      },
+      "MS_CLIENT_SECRET": {
+        "description": "可选，部署后再设 / Optional, set it after deploy: Azure 客户端密钥的「值」/ client secret **Value**（最长 24 个月到期 / expires within 24 months）. [docs/self-host.md](https://github.com/TopCircle/DropRevive/blob/main/docs/self-host.md#onedrive)"
+      },
+      "DRIVE_COOKIE_KEY": {
+        "description": "可选，部署后再设，开通网盘时需要 / Optional, needed once you turn on a drive: 随机 32 字节 base64 / random 32-byte base64 key, `openssl rand -base64 32`. [docs/self-host.md](https://github.com/TopCircle/DropRevive/blob/main/docs/self-host.md#cookie-key)"
+      },
+      "ALLOWED_ORIGINS": {
+        "description": "可选 / Optional: 不设就只允许本站自己的地址 / Unset means only this site's own origin. 只有要允许别的地址时才设，逗号分隔 / Set it only to allow other origins, comma-separated. [docs/self-host.md](https://github.com/TopCircle/DropRevive/blob/main/docs/self-host.md#allowed-origins)"
+      }
+    }
   }
 }

@@ -8,7 +8,7 @@
 
 DropRevive 是独立项目，用来补 Edge Drop 停用之后的同类需求。它与 Microsoft Edge、微软、Google 没有从属或合作关系。
 
-线上试用：<https://drop.habor.dpdns.org>
+线上试用：<https://drop.habor.dpdns.org> · 自己部署：[一键部署到 Cloudflare](#给自己部署的人)
 
 许可证（License）：[MIT](LICENSE)
 
@@ -64,34 +64,46 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 
 ## 给自己部署的人
 
-`npm run deploy` 用于部署你自己的站点。`npm run deploy:production` 仅供维护者使用；它会写入正式站的公开 client ID，并部署到 `wrangler.jsonc` 指定的域名。
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/TopCircle/DropRevive)
+
+点这个按钮，Cloudflare 会把本仓库复制到你的 GitHub 账号，用 Workers Builds 构建，并在 `workers.dev` 上部署一个名为 `droprevive` 的 Worker（带两个 Durable Object）。之后你往自己那份仓库 push，都会自动重新部署。先部署，再配置：部署时不问任何密钥，网站和局域网直传马上就能用；网盘在补上对应的值之后开通：
+
+1. 打开 `https://droprevive.<你的子域>.workers.dev/setup`。这页显示哪些网盘已开通，列出 6 个可选的 Worker 密钥是否已设置（不显示值），检查 Cookie 密钥是否有效、`ALLOWED_ORIGINS` 对当前地址的效果，并给出要登记的回调地址。
+2. 用这两个回调地址建 Google OAuth 客户端和/或 Azure 应用。只用一个网盘也可以：另一个网盘的两项不填（或填 `none`）。
+3. 把已有的值填到 Cloudflare 后台 Workers → 你的 Worker → Settings → Variables and Secrets（或 `npx wrangler secret put NAME`）。保存即生效，不用重新构建；刷新 `/setup`，直到显示你的网盘「已开通」。
+
+第一次一键部署后，如果 `https://droprevive.<你的子域>.workers.dev` 打不开，到 Workers → 你的 Worker → Settings → Domains & Routes（域和路由），把 workers.dev 打开（Cloudflare 的一键部署流程可能在首次部署后把它关掉）；以后的部署会保持开启。
+
+详细步骤（含自定义域名、密钥轮换）：[docs/self-host.zh-CN.md](docs/self-host.zh-CN.md)（[English](docs/self-host.md)）。
+
+全部可选。一个网盘要同时有客户端 ID、客户端密钥和 `DRIVE_COOKIE_KEY` 才会开通（不设或 `none` = 不开通）；局域网直传一项都不需要。
+
+| Worker 密钥 | 是什么 | 说明 |
+| --- | --- | --- |
+| `GOOGLE_CLIENT_ID` | Google OAuth 客户端 ID | 公开值。不用 Google Drive 就不设 |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth 客户端密钥 | 不用 Google Drive 就不设 |
+| `MS_CLIENT_ID` | Azure 应用（客户端）ID | 公开值。不用 OneDrive 就不设 |
+| `MS_CLIENT_SECRET` | Azure 客户端密钥的「值」 | 最长 24 个月到期。不用 OneDrive 就不设 |
+| `DRIVE_COOKIE_KEY` | 刷新令牌 cookie 的 AES-GCM 密钥 | 32 随机字节的 base64：`openssl rand -base64 32`。两个网盘都要用 |
+| `ALLOWED_ORIGINS` | 允许网盘登录和局域网配对的站点地址 | 可选。不设或 `none`：只允许同源（站点自己的地址，workers.dev 或自定义域名）。设了：严格名单，逗号分隔，例如 `https://droprevive.you.workers.dev,https://drop.example.com`。全是格式不对的条目时一律拒绝 |
+
+想在同一个 Cloudflare 账号的几个 Worker 之间共用这些值？设构建变量 `DROP_SECRETS_STORE_ID`，把值放进 Cloudflare Secrets Store，见[指南里的 Secrets Store 一节](docs/self-host.zh-CN.md#可选cloudflare-secrets-store)。默认不启用。
+
+这份清单也在 [`.dev.vars.example`](.dev.vars.example) 里，那是本机开发用的模板，每一行都注释掉了。
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm run dev` | 本地开发，<http://localhost:8080>（只监听本机；要让局域网其他设备访问，用 `HOST=0.0.0.0 npm run dev`）。环境里没有 client ID 时，网盘显示「未开通」 |
-| `npm run build` | 按当前环境变量做生产构建，输出到 `.output/` |
-| `npm run deploy` | 部署到你自己的 Cloudflare 账号。会先检查 `wrangler.jsonc`：Worker 仍叫 `dropreceive`、路由仍指向 `drop.habor.dpdns.org`，或者没有设置路由时，在构建之前就拒绝执行 |
-| `npm run deploy:production` | 仅维护者。替换正式环境 Worker `dropreceive` |
+| `npm run dev` | 本地开发，<http://localhost:8080>（只监听本机；局域网访问用 `HOST=0.0.0.0 npm run dev`）。6 项设置从环境变量读取；没有 client ID 时网盘显示「未开通」 |
+| `npm run build` | 按公开配置构建到 `.output/`（Worker `droprevive`，`workers.dev`，无路由） |
+| `npm run deploy` | 先构建，再核对构建是公开配置（workers.dev 开启、无路由、不叫 `dropreceive`），再 `wrangler deploy`。部署按钮跑的就是它；它自己会先构建，所以后台构建命令为空也能部署。不需要任何密钥 |
+| `npm run deploy:self` | 在自己电脑上构建并部署。Worker 仍叫 `dropreceive`，或路由指向 `drop.habor.dpdns.org` 时拒绝；只用 `workers.dev` 或用你自己的域名都可以 |
+| `npm run deploy:production` | 仅维护者：按正式站配置构建（`DROP_PROFILE=production`，Worker `dropreceive`，自定义域名 `drop.habor.dpdns.org`），部署前核对生成的配置 |
 
-自己部署并开通连接：
+不用按钮：fork 或 clone，`npx wrangler login`，`npm ci`，再运行 `npm run deploy:self`。已经有值的话，可以把 `.dev.vars.example` 复制成 `.dev.vars`，取消注释并填上，会作为 Worker 密钥一起上传。
 
-1. 把 `wrangler.jsonc` 的 `routes` 改成你的域名，并把 Worker 名 `dropreceive` 改成你自己的（例如 `my-droprevive`），`workers_dev` 保持 false。两样都改好之前，`npm run deploy` 会拒绝执行。
-2. 在 Google Cloud 建一个网页 OAuth 客户端。授权回调填 `https://你的域名/api/drive-auth/google/callback`。范围使用 `drive.file`。同意屏幕需要离线访问，这样才会发刷新令牌。
-3. 在 Azure 建一个 Web 平台注册，不要用 SPA。回调填 `https://你的域名/api/drive-auth/microsoft/callback`。范围是 `User.Read`、`Files.ReadWrite`、`offline_access`。authority 使用 `common`。给这个应用建一个客户端密钥。
-4. 构建或部署前设置你自己的 `VITE_GOOGLE_CLIENT_ID` 和 `VITE_MS_CLIENT_ID`。两个都可以留空：站点能打开，对应网盘显示「未开通」。这两个是公开的 client ID（构建时环境变量），不是 Worker 密钥。
-5. 用 `npx wrangler secret put <NAME> --name <worker>` 写入 Worker 密钥（从标准输入传入；不要写进文件，也不要放进 `wrangler.jsonc` 的 `vars`）：
+从旧版本复制的仓库可能仍然报 `The following required secrets have not been set`：到 Worker → Settings → Variables and Secrets 把 6 项加上（暂时没有的填 `none`）再重新构建，或者从上游更新你的仓库。
 
-   | 密钥 | 用途 | 格式 / 示例 |
-   | --- | --- | --- |
-   | `ALLOWED_ORIGINS` | 允许网盘登录和局域网配对的来源 | 逗号分隔的完整 origin，例如 `https://你的域名`（不要带路径）。缺失或为空时拒绝已部署的主机（默认拒绝）。`http://localhost:8080` 仅对本机 `npm run dev` 始终放行。 |
-   | `GOOGLE_CLIENT_SECRET` | Google OAuth 客户端密钥 | 来自 Google Cloud 控制台 |
-   | `MS_CLIENT_SECRET` | Microsoft OAuth 客户端密钥 | 来自 Azure 应用注册 |
-   | `DRIVE_COOKIE_KEY` | 刷新令牌 cookie 的 AES-GCM 密钥 | 32 随机字节的 base64（例如 `openssl rand -base64 32`） |
-
-   示例：`printf '%s' 'https://你的域名' | npx wrangler secret put ALLOWED_ORIGINS --name my-droprevive`
-6. `npx wrangler login` 登录你自己的 Cloudflare 账号，然后运行 `npm run deploy`。
-
-本机要做真实登录时，把 `http://localhost:8080/api/drive-auth/google/callback` 和 `http://localhost:8080/api/drive-auth/microsoft/callback` 登记到这两个控制台，再带上两个 client ID 和三个 OAuth/cookie 密钥运行 `npm run dev`。本机可不设 `ALLOWED_ORIGINS`（`http://localhost:8080` 已内置）。`127.0.0.1:8081` 不在允许的来源里。
+本机要做真实登录时，把 `http://localhost:8080/api/drive-auth/google/callback` 和 `http://localhost:8080/api/drive-auth/microsoft/callback` 登记到两个控制台，再带着这些设置的环境变量运行 `npm run dev`。本机可不设 `ALLOWED_ORIGINS`（`http://localhost:8080` 已内置）。
 
 维护者那套 client ID 只登记了 `https://drop.habor.dpdns.org`。换域名之后不能靠它们完成登录。
 
@@ -99,9 +111,9 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 
 - [参与开发](CONTRIBUTING.md) · [架构说明](docs/architecture.zh-CN.md)（[English](docs/architecture.md)）· [安全策略](SECURITY.md)
 - GitHub Actions 会在 push 和 pull request 时运行类型检查、测试、lint 和构建；CI 不使用部署密钥。
-- `npm test` 先跑脚本测试，再跑单元和集成测试：传送协议和局域网房间、扫码辅助逻辑、网盘登录经纪、跨标签页续签，以及网盘 store（同步、删除、令牌过期）。写这段时共有 10 个脚本测试加 264 个其他测试；lint 保持 0 error、0 warning。
+- `npm test` 先跑脚本测试，再跑单元和集成测试：传送协议和局域网房间、扫码辅助逻辑、网盘登录经纪、跨标签页续签，以及网盘 store（同步、删除、令牌过期）。写这段时共有 34 个脚本测试加 301 个其他测试；lint 保持 0 error、0 warning。
 - 交流和提问：项目的 Telegram 群组 <https://t.me/droprevive>。安全问题请私下报告，见 [SECURITY.md](SECURITY.md)。
-- `npm run deploy` 会运行带域名保护的自建部署。`npm run deploy:production` 才是维护者更新 `drop.habor.dpdns.org` 正式站的专用命令。
+- `wrangler.jsonc` 是公开配置。正式站是 `scripts/wrangler-profile.mjs` 里的一个构建配置；`npm test` 会检查公开、正式、测试站三套配置生成得对不对。
 
 备注：
 
@@ -117,7 +129,8 @@ npm run typecheck
 npm test
 npm run lint
 npm run build
-npm run deploy          # 自建部署；配置仍指向维护者域名时会拒绝
+npm run deploy          # 构建、核对公开配置，再 wrangler deploy（部署按钮跑的就是它）
+npm run deploy:self     # 构建并部署你自己的副本；拒绝维护者的 Worker 和域名
 npm run deploy:production # 只更新 https://drop.habor.dpdns.org
 STAGING_WORKER=<名字> npm run deploy:staging  # 维护者用：部署到 workers.dev 上的测试 Worker；没设 STAGING_WORKER 会拒绝
 ```

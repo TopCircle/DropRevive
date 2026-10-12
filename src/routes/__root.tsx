@@ -9,6 +9,8 @@ import "@fontsource/ibm-plex-sans/600.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import appCss from "../styles.css?url";
+import { applyClientConfig } from "@/lib/drop/client-env";
+import { getClientConfig } from "@/lib/server-config";
 
 const APP_NAME = "DropRevive";
 
@@ -23,6 +25,10 @@ function LocaleSync() {
 }
 
 export const Route = createRootRoute({
+  // Public client IDs from the Worker, resolved during SSR and dehydrated into the page.
+  loader: () => getClientConfig().catch(() => null),
+  staleTime: Infinity,
+  shouldReload: false,
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -46,7 +52,13 @@ export const Route = createRootRoute({
       { rel: "apple-touch-icon", href: "/icons/icon-180.png" },
     ],
   }),
-  component: () => (
+  component: RootDocument,
+});
+
+function RootDocument() {
+  // Before any child renders (server and client alike), so "configured" never flickers.
+  applyClientConfig(Route.useLoaderData());
+  return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <HeadContent />
@@ -78,5 +90,5 @@ export const Route = createRootRoute({
         <Scripts />
       </body>
     </html>
-  ),
-});
+  );
+}

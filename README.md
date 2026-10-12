@@ -8,7 +8,7 @@ When the other side opens later, sign in with the same drive account and sync to
 
 DropRevive is an independent project for the kind of need Edge Drop used to cover. It is not affiliated with Microsoft Edge, Microsoft, or Google.
 
-Try it live: <https://drop.habor.dpdns.org>
+Try it live: <https://drop.habor.dpdns.org> · Self-host: [Deploy to Cloudflare](#for-people-who-self-host)
 
 License: [MIT](LICENSE)
 
@@ -64,34 +64,46 @@ If UI language was never saved: browser languages starting with `zh` get Chinese
 
 ## For people who self-host
 
-`npm run deploy` is the self-host command. `npm run deploy:production` is reserved for maintainers; it bakes in the production site's public client IDs and deploys to the domain in `wrangler.jsonc`.
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/TopCircle/DropRevive)
+
+The button copies this repository into your GitHub account, builds it with Workers Builds and deploys a Worker named `droprevive` on `workers.dev` with its two Durable Objects. Every push to your copy redeploys. Deploy first, configure later: the deploy asks for no secrets, and the site and LAN transfer work right away. Drives turn on as you add their values:
+
+1. Open `https://droprevive.<your-subdomain>.workers.dev/setup`. It shows which drives are on, lists the six optional Worker secrets as set or not set (never their values), checks the cookie key, shows how `ALLOWED_ORIGINS` applies to this origin, and shows the exact callback URLs to register.
+2. Create a Google OAuth client and/or an Azure app with those callback URLs. Only one drive is fine: leave the other drive's two values unset (or `none`).
+3. Add the values you have under Workers > your Worker > Settings > Variables and Secrets (or `npx wrangler secret put NAME`). Saving takes effect without a rebuild; reload `/setup` until it lists your drive as on.
+
+If `https://droprevive.<your-subdomain>.workers.dev` does not open after the first one-click deploy, go to Workers > your Worker > Settings > Domains & Routes and turn on workers.dev (Cloudflare's button flow can leave it off on the first deploy); later deploys keep it on.
+
+Step-by-step guide, including your own domain and key rotation: [docs/self-host.md](docs/self-host.md) ([中文](docs/self-host.zh-CN.md)).
+
+All optional. A drive is on only when its client ID, its client secret and `DRIVE_COOKIE_KEY` are all set (unset or `none` = off); LAN transfer needs none of them.
+
+| Worker secret | What | Notes |
+| --- | --- | --- |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | Public value. Unset if you do not use Google Drive |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | Unset if you do not use Google Drive |
+| `MS_CLIENT_ID` | Azure application (client) ID | Public value. Unset if you do not use OneDrive |
+| `MS_CLIENT_SECRET` | Azure client secret value | Expires within 24 months. Unset if you do not use OneDrive |
+| `DRIVE_COOKIE_KEY` | AES-GCM key for refresh-token cookies | 32 random bytes, base64: `openssl rand -base64 32`. Both drives need it |
+| `ALLOWED_ORIGINS` | Origins allowed for sign-in and LAN pairing | Optional. Unset or `none`: same-origin only (the site's own address, workers.dev or custom domain). Set: a strict comma-separated list, e.g. `https://droprevive.you.workers.dev,https://drop.example.com`. Only malformed entries → everything refused (fail closed) |
+
+Sharing them between Workers of one Cloudflare account? Set the build variable `DROP_SECRETS_STORE_ID` and keep them in Cloudflare Secrets Store; see [Secrets Store in the guide](docs/self-host.md#optional-cloudflare-secrets-store). Off by default.
+
+The list is also in [`.dev.vars.example`](.dev.vars.example), a commented template for local development.
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Local dev at <http://localhost:8080> (listens on localhost only; `HOST=0.0.0.0 npm run dev` to reach it from other devices on your LAN). Without client IDs in the environment, drives show as unavailable |
-| `npm run build` | Production build into `.output/` using the current env vars |
-| `npm run deploy` | Deploy to your Cloudflare account. Checks `wrangler.jsonc` first and refuses, before building, while the Worker is named `dropreceive`, a route points at `drop.habor.dpdns.org`, or no route is set |
-| `npm run deploy:production` | Maintainers only. Replaces production Worker `dropreceive` |
+| `npm run dev` | Local dev at <http://localhost:8080> (localhost only; `HOST=0.0.0.0 npm run dev` for your LAN). Reads the six settings from the environment; without client IDs, drives show as unavailable |
+| `npm run build` | Build the public profile into `.output/` (Worker `droprevive`, `workers.dev`, no route) |
+| `npm run deploy` | Builds, checks the build is the public profile (workers.dev on, no route, not `dropreceive`), then `wrangler deploy`. This is what the button runs; it builds first, so it works even when the dashboard build command is empty. Needs no secrets |
+| `npm run deploy:self` | Build and deploy from your own machine. Refuses while the Worker is named `dropreceive` or a route points at `drop.habor.dpdns.org`; a `workers.dev`-only Worker or your own domain is fine |
+| `npm run deploy:production` | Maintainers only: builds the production profile (`DROP_PROFILE=production`, Worker `dropreceive`, custom domain `drop.habor.dpdns.org`) and checks the generated config before deploying |
 
-To self-host with sign-in:
+Without the button: fork or clone, `npx wrangler login`, `npm ci`, then `npm run deploy:self`. Optionally copy `.dev.vars.example` to `.dev.vars` and uncomment what you have; it is uploaded as the Worker's secrets.
 
-1. Change `wrangler.jsonc` `routes` to your domain and rename the Worker from `dropreceive` to your own name (e.g. `my-droprevive`); keep `workers_dev` false. `npm run deploy` refuses until both are changed.
-2. Create a web OAuth client in Google Cloud. Callback: `https://YOUR_DOMAIN/api/drive-auth/google/callback`. Scope `drive.file`. Consent screen needs offline access so a refresh token is issued.
-3. Register a Web platform app in Azure (not SPA). Callback: `https://YOUR_DOMAIN/api/drive-auth/microsoft/callback`. Scopes `User.Read`, `Files.ReadWrite`, `offline_access`. Authority `common`. Create a client secret for the app.
-4. Set your own `VITE_GOOGLE_CLIENT_ID` and `VITE_MS_CLIENT_ID` before build/deploy. Either may be empty: the site loads; that drive shows as unavailable. These are public client IDs (build-time env), not Worker secrets.
-5. Set Worker secrets with `npx wrangler secret put <NAME> --name <worker>` (stdin; never write values into files or `wrangler.jsonc` `vars`):
+A copy made from an older version may still fail with `The following required secrets have not been set`: add the six in Worker → Settings → Variables and Secrets (`none` for what you do not have yet) and retry the build, or update the copy from upstream.
 
-   | Secret | Purpose | Format / example |
-   | --- | --- | --- |
-   | `ALLOWED_ORIGINS` | Origins allowed for drive sign-in and LAN pairing | Comma-separated full origins, e.g. `https://YOUR_DOMAIN` (no path). Missing or empty → refuse deployed hosts (fail closed). `http://localhost:8080` is always allowed for local `npm run dev` only. |
-   | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | From Google Cloud console |
-   | `MS_CLIENT_SECRET` | Microsoft OAuth client secret | From Azure app registration |
-   | `DRIVE_COOKIE_KEY` | AES-GCM key for refresh-token cookies | 32 random bytes, base64 (e.g. `openssl rand -base64 32`) |
-
-   Example: `printf '%s' 'https://YOUR_DOMAIN' | npx wrangler secret put ALLOWED_ORIGINS --name my-droprevive`
-6. `npx wrangler login` to your Cloudflare account, then `npm run deploy`.
-
-For real sign-in locally, register `http://localhost:8080/api/drive-auth/google/callback` and `http://localhost:8080/api/drive-auth/microsoft/callback` in both consoles, then run `npm run dev` with both client IDs and the three OAuth/cookie secrets. `ALLOWED_ORIGINS` is optional locally (`http://localhost:8080` is built in). `127.0.0.1:8081` is not an allowed origin.
+For real sign-in locally, register `http://localhost:8080/api/drive-auth/google/callback` and `http://localhost:8080/api/drive-auth/microsoft/callback`, then run `npm run dev` with the settings in the environment. `ALLOWED_ORIGINS` is optional locally (`http://localhost:8080` is built in).
 
 Maintainer client IDs are registered only for `https://drop.habor.dpdns.org`. They will not complete sign-in on another domain.
 
@@ -99,9 +111,9 @@ Maintainer client IDs are registered only for `https://drop.habor.dpdns.org`. Th
 
 - [Contributing](CONTRIBUTING.md) · [Architecture](docs/architecture.md) ([中文](docs/architecture.zh-CN.md)) · [Security policy](SECURITY.md)
 - GitHub Actions runs typecheck, tests, lint and build on pushes and pull requests. CI does not use deployment secrets.
-- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and LAN rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 10 script tests plus 264 others; lint is kept at 0 errors and 0 warnings.
+- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and LAN rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 34 script tests plus 301 others; lint is kept at 0 errors and 0 warnings.
 - Community and questions: the project's Telegram group, <https://t.me/droprevive>. Report security problems privately, see [SECURITY.md](SECURITY.md).
-- `npm run deploy` runs the guarded self-host deployment. `npm run deploy:production` is the explicit maintainer-only production command for `drop.habor.dpdns.org`.
+- `wrangler.jsonc` is the public profile. The production site is a build profile in `scripts/wrangler-profile.mjs`; `npm test` checks that the public, production and staging configs come out as expected.
 
 Notes:
 
@@ -117,7 +129,8 @@ npm run typecheck
 npm test
 npm run lint
 npm run build
-npm run deploy          # self-host; refuses while the maintainer domain is configured
+npm run deploy          # build, check the public profile, wrangler deploy (what the button runs)
+npm run deploy:self     # build + deploy your own copy; refuses the maintainer's Worker and domain
 npm run deploy:production # updates https://drop.habor.dpdns.org only
 STAGING_WORKER=<name> npm run deploy:staging  # maintainers: deploys a test Worker on workers.dev; refuses without STAGING_WORKER
 ```

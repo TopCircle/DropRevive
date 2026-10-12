@@ -17,7 +17,7 @@ type RoomStub = {
 export type TransferHttpEnv = {
   TRANSFER_ROOM: { getByName(name: string): RoomStub };
   TRANSFER_GATE: { getByName(name: string): { allow(kind: string, ip: string): Promise<boolean> } };
-  /** Comma-separated full origins; same Worker secret as the drive-auth broker. */
+  /** Comma-separated full origins; same Worker secret as the drive-auth broker. Optional: unset = same-origin only. */
   ALLOWED_ORIGINS?: string;
 };
 
@@ -37,11 +37,13 @@ function originAllowed(request: Request, env: TransferHttpEnv): boolean {
     return false;
   }
   // Pairing must be same-host as the page that opened the WebSocket / POST.
-  if (parsed.host !== new URL(request.url).host) return false;
+  const site = new URL(request.url);
+  if (parsed.host !== site.host) return false;
+  // ALLOWED_ORIGINS unset/none: same-origin only; set: the strict list (see allowed-origins.ts).
   const allowed = parseAllowedOrigins(env.ALLOWED_ORIGINS);
   const malformed = malformedWarning(allowed);
   if (malformed) warnOnce("transfer", malformed);
-  if (!isAllowedOrigin(parsed.origin, allowed)) {
+  if (!isAllowedOrigin(parsed.origin, allowed, site.origin)) {
     warnOnce("transfer", refusalReason(parsed.origin, allowed));
     return false;
   }

@@ -61,7 +61,7 @@ flowchart LR
 - Worker 只做三件事：发页面；替浏览器向 Google / Microsoft 换令牌（需要 client secret 的那一步）；局域网直传的配对和信令。
 - 没有数据库。登录状态是浏览器里的加密 cookie。Durable Object 只放直传房间（代码、两端的随机令牌和设备名，10 分钟没配上就过期，会话最长 2 小时）和一分钟窗口的限流计数。
 - 局域网直传的 `RTCPeerConnection` 用 `iceServers: []`，不用 STUN，也不用 TURN，所以只在两台设备能直接互通时连得上（同一个局域网）。访客网络隔离、VPN、蜂窝网会失败，界面会让用户改用云端。
-- `npm run dev`（Vite）里没有 Durable Object，`/api/transfer` 返回 404；直传只能在部署后的 Worker 上试，且该 Worker 的 `ALLOWED_ORIGINS` 密钥须包含该站点的 origin。
+- `npm run dev`（Vite）里没有 Durable Object，`/api/transfer` 返回 404；直传只能在部署后的 Worker 上试（不设 `ALLOWED_ORIGINS` 时在 Worker 自己的地址上可用；设了的话名单里须包含该站点的 origin）。
 
 ## 2. 登录和续签
 
@@ -118,7 +118,7 @@ sequenceDiagram
 
 说明：
 
-- 允许的来源来自 Worker 密钥 `ALLOWED_ORIGINS`（逗号分隔的完整 origin）。缺失或为空时拒绝已部署的主机；`http://localhost:8080` 仍对本机 `npm run dev` 放行。`redirect_uri` 用的是请求本身的来源，所以每个部署各自回到自己的域名。
+- 允许的来源来自可选的 Worker 密钥 `ALLOWED_ORIGINS`（逗号分隔的完整 origin）。不设、为空或 `none`：只允许同源（请求的 Origin 必须等于请求 URL 的 origin，workers.dev 和自定义域名都包括在内）。设了：严格名单。全是格式不对的条目：一律拒绝（默认拒绝）。`http://localhost:8080` 仍对本机 `npm run dev` 放行。一个网盘要有客户端 ID、客户端密钥和 32 字节的 `DRIVE_COOKIE_KEY` 才开通，否则它的接口返回 `not_configured`。`redirect_uri` 用的是请求本身的来源，所以每个部署各自回到自己的域名。
 - `http://localhost` 上 cookie 不加 `__Secure-` 前缀，也不加 `Secure`。
 - 回调里服务商返回的错误只换成固定的中文说明，不把对方的原文带回页面。
 - 「断开」只清这台设备的 cookie，不会去服务商那边撤销授权。要让所有设备都失效，到 Google / Microsoft 的账号权限页撤销（`/privacy` 里有链接）。
@@ -137,7 +137,8 @@ sequenceDiagram
 | Cache Storage（Service Worker） | 离线外壳；系统分享进来的内容暂存在 `droprevive-share`，打开应用后取走 | 本站 |
 | Durable Object `TransferRoom` | 直传房间：代码、两端随机令牌、设备名、阶段；过期删除 | 只有 Worker |
 | Durable Object `TransferGate` | `create:IP` / `join:IP` 一分钟窗口的计数，过期删除 | 只有 Worker |
-| Worker 密钥 | `ALLOWED_ORIGINS`、`GOOGLE_CLIENT_SECRET`、`MS_CLIENT_SECRET`、`DRIVE_COOKIE_KEY` | 只有 Worker；不进前端包，也不写进 `wrangler.jsonc` 的 `vars` |
+| Worker 密钥 | `ALLOWED_ORIGINS`、`GOOGLE_CLIENT_SECRET`、`MS_CLIENT_SECRET`、`DRIVE_COOKIE_KEY` | 只有 Worker；不进前端包，也不写进 `wrangler.jsonc` 的 `vars`。`/setup` 只显示是否已配置及来源。也可以改放 Cloudflare Secrets Store：构建时设了 `DROP_SECRETS_STORE_ID` 就会加上 `SS_<KEY>` 绑定，优先读取，每个 isolate 缓存约 60 秒；见 `src/lib/runtime-config.ts` 的 `resolveConfigEnv` |
+| Worker 密钥（公开值） | `GOOGLE_CLIENT_ID`、`MS_CLIENT_ID` | SSR 时由根路由 loader 交给页面，`GET /api/config` 也返回；没设时用构建时的 `VITE_*` |
 
 清除本机缓存只删上面浏览器里的部分，网盘里的文件还在。在应用里删除一条记录，才会把网盘里的对应文件删掉。
 
@@ -154,6 +155,8 @@ sequenceDiagram
 | `src/lib/transfer/` | 直传协议、分块、限额（`limits.ts`）、重连；扫码辅助 `scan-camera.ts`、`scan-decode.ts`（第 6 节） |
 | `src/lib/links.ts`、`src/components/drop/telegram-icon.tsx` | Telegram 群组地址（`SECURITY.md` 里也有，由测试保证两处一致）和用在隐私页、设置旁边的 logo |
 | `scripts/deploy-self.mjs`、`scripts/deploy-staging.mjs`、`.github/workflows/ci.yml` | 带保护的自建部署、测试站部署、CI |
+| `scripts/wrangler-profile.mjs`、`scripts/check-profile.mjs` | 公开 / 正式站 Worker 配置（`DROP_PROFILE`），构建后核对配置 |
+| `src/routes/setup.tsx`、`src/lib/setup-status.ts`、`src/lib/runtime-config.ts`、`src/lib/server-config.ts` | `/setup` 自检页，运行时读取 Worker 设置 |
 | `public/sw.js`、`public/manifest.webmanifest`、`public/icons/` | Service Worker、PWA 清单（含分享目标）、图标 |
 
 ## 5. 网盘 store 的模块
@@ -192,7 +195,7 @@ flowchart TB
 
 ## 6. 局域网直传：HTTP 入口和页面内扫码器
 
-`server/transfer-http.ts` 是局域网配对唯一的 HTTP 入口。它按 `ALLOWED_ORIGINS` 检查请求来源；声明的 `Content-Length` 超过上限时，读取前就拒绝；请求体按流读取，超过上限立即取消（分块或少报长度的请求体不会被整个缓冲）；解析出的 JSON 还要校验：必须是普通对象，`deviceName` 和 `code` 必须是符合格式的字符串，多余的未知字段忽略。超大请求返回 413，格式不对返回 400，这条路径不应出现 500。
+`server/transfer-http.ts` 是局域网配对唯一的 HTTP 入口。它检查请求来源（先要求与请求同主机，再按 `ALLOWED_ORIGINS`，不设时按同源）；声明的 `Content-Length` 超过上限时，读取前就拒绝；请求体按流读取，超过上限立即取消（分块或少报长度的请求体不会被整个缓冲）；解析出的 JSON 还要校验：必须是普通对象，`deviceName` 和 `code` 必须是符合格式的字符串，多余的未知字段忽略。超大请求返回 413，格式不对返回 400，这条路径不应出现 500。
 
 ```mermaid
 flowchart LR

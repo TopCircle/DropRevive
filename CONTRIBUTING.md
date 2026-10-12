@@ -33,11 +33,11 @@ Camera and focus behaviour cannot be checked in a desktop browser, so try LAN pa
 1. Branch from `main` with a short descriptive name (for example `fix/transfer-timeout`).
 2. Keep each change focused, with tests where behavior changes.
 3. Open a pull request against `main`. CI must pass before merge.
-4. Only maintainers deploy the production site with `npm run deploy:production`. Forks can self-host with `npm run deploy` after following "For people who self-host" in the README.
+4. Only maintainers deploy the production site with `npm run deploy:production`. Anyone can self-host with the Deploy to Cloudflare button or `npm run deploy:self`; see [`docs/self-host.md`](docs/self-host.md).
 
 ### Secrets
 
-Never commit secrets: no `.env`, `.dev.vars`, OAuth client secrets, cookie keys, tokens or cookies. Worker secrets are set with `npx wrangler secret put` and never live in the repo. The list of secrets and what each is for is in the README ("For people who self-host") and in [`docs/architecture.md`](docs/architecture.md). OAuth client IDs are public and are fine to commit.
+Never commit secrets: no `.env`, `.dev.vars` (only the placeholder `.dev.vars.example` is tracked), OAuth client secrets, cookie keys, tokens or cookies. Worker secrets are set with `npx wrangler secret put` and never live in the repo. The list of secrets and what each is for is in the README ("For people who self-host") and in [`docs/architecture.md`](docs/architecture.md). OAuth client IDs are public and are fine to commit.
 
 Found a security problem? Do not open an issue; follow [`SECURITY.md`](SECURITY.md).
 
@@ -72,10 +72,10 @@ CI（GitHub Actions）在每次 push 和 pull request 时跑 `npm ci`、类型�
 1. 从 `main` 拉分支，名字简短说明用途（例如 `fix/transfer-timeout`）。
 2. 每个改动保持聚焦；行为有变化就补测试。
 3. 向 `main` 开 pull request。CI 通过后才能合并。
-4. 只有维护者能用 `npm run deploy:production` 更新正式站。Fork 可以按 README“给自己部署的人”使用 `npm run deploy` 自行部署。
+4. 只有维护者能用 `npm run deploy:production` 更新正式站。其他人可以用「Deploy to Cloudflare」按钮或 `npm run deploy:self` 自行部署，见 [`docs/self-host.zh-CN.md`](docs/self-host.zh-CN.md)。
 
 ### 密钥
 
-永远不要提交密钥：不提交 `.env`、`.dev.vars`、OAuth client secret、cookie 密钥、令牌或 cookie。Worker 密钥用 `npx wrangler secret put` 设置，从不放进仓库。需要哪些密钥、各自做什么，见 README“给自己部署的人”和 [`docs/architecture.zh-CN.md`](docs/architecture.zh-CN.md)。OAuth client ID 是公开的，可以提交。
+永远不要提交密钥：不提交 `.env`、`.dev.vars`（只有占位用的 `.dev.vars.example` 进仓库）、OAuth client secret、cookie 密钥、令牌或 cookie。Worker 密钥用 `npx wrangler secret put` 设置，从不放进仓库。需要哪些密钥、各自做什么，见 README“给自己部署的人”和 [`docs/architecture.zh-CN.md`](docs/architecture.zh-CN.md)。OAuth client ID 是公开的，可以提交。
 
 发现安全问题？不要开 issue，请按 [`SECURITY.md`](SECURITY.md) 私下报告。
