@@ -1,4 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import { Link } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { useCallback, useState, type UIEvent } from "react";
 import { toast } from "sonner";
@@ -9,6 +10,7 @@ import { edgeFadeMask, sameEdges, scrollEdges, type ScrollEdges } from "@/lib/dr
 import { useDropStore } from "@/lib/drop/store";
 import type { ThemeMode } from "@/lib/drop/types";
 import { listPacks, setLocale, useI18n } from "@/lib/i18n";
+import { splitPlaceholder } from "@/lib/i18n/rich";
 
 export function SettingsDialog() {
   const open = useDropStore((state) => state.settingsOpen);
@@ -126,7 +128,7 @@ export function SettingsDialog() {
                 </div>
                 {google?.email && <p className="mt-1 truncate text-sm">{t("settings.account", { name: google.email })}</p>}
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {googleConfigured ? t("settings.googleScope") : t("settings.googleOff")}
+                  {googleConfigured ? t("settings.googleScope") : <SetupLinked text={t("settings.googleOff")} onOpen={closeSettings} />}
                 </p>
                 <div className="mt-3">
                   <Button className="w-full" disabled={!googleConfigured || busy || working !== null} onClick={() => launch("google")}>
@@ -147,7 +149,7 @@ export function SettingsDialog() {
                 </div>
                 {microsoft?.username && <p className="mt-1 truncate text-sm">{t("settings.account", { name: microsoft.username })}</p>}
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {microsoftConfigured ? t("settings.microsoftScope") : t("settings.microsoftOff")}
+                  {microsoftConfigured ? t("settings.microsoftScope") : <SetupLinked text={t("settings.microsoftOff")} onOpen={closeSettings} />}
                 </p>
                 <div className="mt-3">
                   <Button className="w-full" disabled={!microsoftConfigured || busy || working !== null} onClick={() => launch("microsoft")}>
@@ -261,4 +263,23 @@ function useScrollEdges() {
   );
   const onScroll = useCallback((event: UIEvent<HTMLDivElement>) => measure(event.currentTarget), [measure]);
   return { state, ref, onScroll };
+}
+
+/** Renders a message's `{setup}` placeholder as an in-app link to /setup. */
+function SetupLinked({ text, onOpen }: { text: string; onOpen: () => void }) {
+  const parts = splitPlaceholder(text, "setup");
+  return (
+    <>
+      {parts.map((part, index) => (
+        <span key={index}>
+          {part}
+          {index < parts.length - 1 && (
+            <Link data-setup-link="" to="/setup" onClick={onOpen} className="underline underline-offset-4 hover:text-foreground">
+              /setup
+            </Link>
+          )}
+        </span>
+      ))}
+    </>
+  );
 }

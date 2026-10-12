@@ -72,6 +72,8 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 2. 用这两个回调地址建 Google OAuth 客户端和/或 Azure 应用。只用一个网盘也可以：另一个网盘的两项不填（或填 `none`）。
 3. 把已有的值填到 Cloudflare 后台 Workers → 你的 Worker → Settings → Variables and Secrets（或 `npx wrangler secret put NAME`）。保存即生效，不用重新构建；刷新 `/setup`，直到显示你的网盘「已开通」。
 
+第一次一键部署后，如果 `https://droprevive.<你的子域>.workers.dev` 打不开，到 Workers → 你的 Worker → Settings → Domains & Routes（域和路由），把 workers.dev 打开（Cloudflare 的一键部署流程可能在首次部署后把它关掉）；以后的部署会保持开启。
+
 详细步骤（含自定义域名、密钥轮换）：[docs/self-host.zh-CN.md](docs/self-host.zh-CN.md)（[English](docs/self-host.md)）。
 
 全部可选。一个网盘要同时有客户端 ID、客户端密钥和 `DRIVE_COOKIE_KEY` 才会开通（不设或 `none` = 不开通）；局域网直传一项都不需要。
@@ -107,7 +109,7 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 
 - [参与开发](CONTRIBUTING.md) · [架构说明](docs/architecture.zh-CN.md)（[English](docs/architecture.md)）· [安全策略](SECURITY.md)
 - GitHub Actions 会在 push 和 pull request 时运行类型检查、测试、lint 和构建；CI 不使用部署密钥。
-- `npm test` 先跑脚本测试，再跑单元和集成测试：传送协议和局域网房间、扫码辅助逻辑、网盘登录经纪、跨标签页续签，以及网盘 store（同步、删除、令牌过期）。写这段时共有 31 个脚本测试加 291 个其他测试；lint 保持 0 error、0 warning。
+- `npm test` 先跑脚本测试，再跑单元和集成测试：传送协议和局域网房间、扫码辅助逻辑、网盘登录经纪、跨标签页续签，以及网盘 store（同步、删除、令牌过期）。写这段时共有 31 个脚本测试加 295 个其他测试；lint 保持 0 error、0 warning。
 - 交流和提问：项目的 Telegram 群组 <https://t.me/droprevive>。安全问题请私下报告，见 [SECURITY.md](SECURITY.md)。
 - `wrangler.jsonc` 是公开配置。正式站是 `scripts/wrangler-profile.mjs` 里的一个构建配置；`npm test` 会检查公开、正式、测试站三套配置生成得对不对。
 

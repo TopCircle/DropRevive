@@ -72,6 +72,8 @@ The button copies this repository into your GitHub account, builds it with Worke
 2. Create a Google OAuth client and/or an Azure app with those callback URLs. Only one drive is fine: leave the other drive's two values unset (or `none`).
 3. Add the values you have under Workers > your Worker > Settings > Variables and Secrets (or `npx wrangler secret put NAME`). Saving takes effect without a rebuild; reload `/setup` until it lists your drive as on.
 
+If `https://droprevive.<your-subdomain>.workers.dev` does not open after the first one-click deploy, go to Workers > your Worker > Settings > Domains & Routes and turn on workers.dev (Cloudflare's button flow can leave it off on the first deploy); later deploys keep it on.
+
 Step-by-step guide, including your own domain and key rotation: [docs/self-host.md](docs/self-host.md) ([中文](docs/self-host.zh-CN.md)).
 
 All optional. A drive is on only when its client ID, its client secret and `DRIVE_COOKIE_KEY` are all set (unset or `none` = off); LAN transfer needs none of them.
@@ -107,7 +109,7 @@ Maintainer client IDs are registered only for `https://drop.habor.dpdns.org`. Th
 
 - [Contributing](CONTRIBUTING.md) · [Architecture](docs/architecture.md) ([中文](docs/architecture.zh-CN.md)) · [Security policy](SECURITY.md)
 - GitHub Actions runs typecheck, tests, lint and build on pushes and pull requests. CI does not use deployment secrets.
-- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and LAN rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 31 script tests plus 291 others; lint is kept at 0 errors and 0 warnings.
+- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and LAN rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 31 script tests plus 295 others; lint is kept at 0 errors and 0 warnings.
 - Community and questions: the project's Telegram group, <https://t.me/droprevive>. Report security problems privately, see [SECURITY.md](SECURITY.md).
 - `wrangler.jsonc` is the public profile. The production site is a build profile in `scripts/wrangler-profile.mjs`; `npm test` checks that the public, production and staging configs come out as expected.
 

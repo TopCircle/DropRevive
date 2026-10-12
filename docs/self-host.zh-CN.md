@@ -25,6 +25,8 @@
 
 站点地址是 `https://<Worker 名>.<你的子域>.workers.dev`（子域在后台 Workers & Pages 页面能看到）。以后你往自己那份仓库 push，都会自动重新部署，密钥会保留。
 
+第一次一键部署后，如果 `workers.dev` 地址打不开，到 Workers & Pages → 你的 Worker → **Settings → Domains & Routes（域和路由）**，把 **workers.dev** 打开。Cloudflare 的一键部署流程可能在首次部署后把它关掉（部署本身已经开启过）；以后的部署会保持开启。
+
 不用按钮：clone 仓库，`npm ci`，`npx wrangler login`，再运行 `npm run deploy:self`。已经有值的话，可以把 `.dev.vars.example` 复制成 `.dev.vars`，取消注释并填上，它会作为 Worker 密钥一起上传（`wrangler deploy --secrets-file`）。
 
 ## 2. 打开 /setup
@@ -126,6 +128,7 @@ npx wrangler secret put GOOGLE_CLIENT_ID --name droprevive
 
 | 现象 | 处理 |
 | --- | --- |
+| 第一次一键部署后 `workers.dev` 地址打不开 | Workers & Pages → 你的 Worker → **Settings → Domains & Routes（域和路由）**：打开 **workers.dev**。只需要这一次，以后的部署会保持开启 |
 | 网盘显示「未开通」 | 它的客户端 ID、客户端密钥或 `DRIVE_COOKIE_KEY` 没设、是 `none` 或不对，看 `/setup` |
 | 构建日志：`The following required secrets have not been set` | 你的仓库是从要求必填密钥的旧版本复制的。在 **Settings → Variables and Secrets** 把 6 项加上（暂时没有的填 `none`）再 **Retry build**，或者从上游更新你的仓库 |
 | `redirect_uri_mismatch`（Google）或 `AADSTS50011`（Azure） | 控制台里的回调地址和 `/setup` 显示的不一致（协议、域名、路径） |

@@ -25,6 +25,8 @@ Every value is optional. A drive is on once its client ID, its client secret and
 
 Your site is `https://<worker-name>.<your-subdomain>.workers.dev` (the subdomain is shown under Workers & Pages in the dashboard). Every push to your copy of the repository redeploys; secrets are kept.
 
+If the `workers.dev` address does not open after the first one-click deploy, go to Workers & Pages → your Worker → **Settings → Domains & Routes** and turn on **workers.dev**. Cloudflare's button flow can leave it off on the first deploy even though the deploy enabled it; later deploys keep it on.
+
 Without the button: clone the repository, `npm ci`, `npx wrangler login`, then `npm run deploy:self`. Optionally copy `.dev.vars.example` to `.dev.vars` and uncomment what you already have; it is uploaded as the Worker's secrets (`wrangler deploy --secrets-file`).
 
 ## 2. Open /setup
@@ -126,6 +128,7 @@ Reload `/setup`. When it lists a drive as on, open the site, Settings, and conne
 
 | Symptom | Fix |
 | --- | --- |
+| `workers.dev` address does not open after the first one-click deploy | Workers & Pages → your Worker → **Settings → Domains & Routes**: turn on **workers.dev**. Only needed once; later deploys keep it on |
 | Drive shows "not configured" | Its client ID, its client secret or `DRIVE_COOKIE_KEY` is unset, `none` or invalid; see `/setup` |
 | Build log: `The following required secrets have not been set` | Your copy is from an older version that required secrets. Add the six in **Settings → Variables and Secrets** (`none` for what you do not have yet) and **Retry build**, or update your copy from upstream |
 | `redirect_uri_mismatch` (Google) or `AADSTS50011` (Azure) | The callback URL in the console differs from the one `/setup` shows (scheme, domain, path) |

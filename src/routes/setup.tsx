@@ -103,6 +103,12 @@ function Details({ status }: { status: SetupDetails }) {
         only with its client ID, its client secret and <code className="font-mono">DRIVE_COOKIE_KEY</code>; leave an unused drive empty or{" "}
         <code className="font-mono">none</code>.
       </p>
+      <p data-testid="setup-workers-dev" className="mt-2 text-xs text-subtle">
+        第一次一键部署后，如果 workers.dev 地址打不开：Worker → Settings → Domains & Routes（域和路由），把 workers.dev 打开；以后的部署会保持开启。
+        <br />
+        After the first one-click deploy, if the workers.dev address does not open: Worker → Settings → Domains &amp; Routes, turn on workers.dev; later
+        deploys keep it on.
+      </p>
       <DriveLines status={status} />
       <ul className="mt-3 divide-y divide-border rounded-lg border border-border bg-card">
         {status.items.map((item) => {
