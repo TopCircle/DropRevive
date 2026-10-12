@@ -29,6 +29,46 @@ export const CONFIG_SECRETS = [
 ];
 
 /**
+ * Optional Cloudflare Secrets Store (account-level secrets shared by Workers of one account).
+ * Off unless DROP_SECRETS_STORE_ID is set when building: then the build binds SS_<KEY> to the
+ * store secrets below and the app reads them before the plain Worker secrets
+ * (src/lib/runtime-config.ts resolveConfigEnv). No profile adds them by default, so the button
+ * deploy and the production / staging configs are unchanged.
+ */
+export const STORE_ID_VAR = "DROP_SECRETS_STORE_ID";
+export const COOKIE_SECRET_NAME_VAR = "DROP_COOKIE_KEY_SECRET_NAME";
+export const DEFAULT_COOKIE_SECRET_NAME = "DROP_DRIVE_COOKIE_KEY";
+export const STORE_SECRET_NAMES = {
+  GOOGLE_CLIENT_ID: "DROP_GOOGLE_CLIENT_ID",
+  GOOGLE_CLIENT_SECRET: "DROP_GOOGLE_CLIENT_SECRET",
+  MS_CLIENT_ID: "DROP_MS_CLIENT_ID",
+  MS_CLIENT_SECRET: "DROP_MS_CLIENT_SECRET",
+};
+
+/**
+ * The secrets_store_secrets bindings for this build, or [] when DROP_SECRETS_STORE_ID is unset.
+ * @param {Record<string, string | undefined>} env
+ * @returns {{ binding: string; store_id: string; secret_name: string }[]}
+ */
+export function secretsStoreBindings(env) {
+  const storeId = (env[STORE_ID_VAR] ?? "").trim();
+  if (!storeId) return [];
+  if (!/^[0-9a-f]{32}$/i.test(storeId)) {
+    throw new Error(`${STORE_ID_VAR} must be the 32-character Secrets Store ID (Dashboard > Secrets Store)`);
+  }
+  const cookieName = (env[COOKIE_SECRET_NAME_VAR] ?? "").trim() || DEFAULT_COOKIE_SECRET_NAME;
+  if (!/^[A-Za-z0-9_-]+$/.test(cookieName)) {
+    throw new Error(`${COOKIE_SECRET_NAME_VAR} must be a secret name without spaces`);
+  }
+  /** @type {[string, string][]} */
+  const names = [...Object.entries(STORE_SECRET_NAMES), ["DRIVE_COOKIE_KEY", cookieName]];
+  return names.map(([key, secretName]) => ({ binding: `SS_${key}`, store_id: storeId, secret_name: secretName }));
+}
+
+/** Binding names the app understands (SS_<KEY>). */
+export const STORE_BINDINGS = [...Object.keys(STORE_SECRET_NAMES), "DRIVE_COOKIE_KEY"].map((key) => `SS_${key}`);
+
+/**
  * Keys in wrangler.jsonc that only the public (button / self-host) profile uses. The maintainer's
  * production and staging deploys drop them, so their generated config stays what it was before the
  * button existed. (`secrets` is listed too: no profile may declare required secrets.)
@@ -109,18 +149,24 @@ export function profileFrom(raw) {
 
 /**
  * Wrangler settings nitro merges over wrangler.jsonc (nitro's `cloudflare.wrangler` option).
+ * `env` is the build environment: DROP_SECRETS_STORE_ID there adds the Secrets Store bindings.
  * @param {Profile} profile
+ * @param {Record<string, string | undefined>} [env]
  * @returns {Record<string, unknown>}
  */
-export function profileOverrides(profile) {
-  if (profile === "production") {
-    return {
-      name: PRODUCTION_WORKER,
-      workers_dev: false,
-      routes: [{ pattern: PRODUCTION_HOST, custom_domain: true }],
-    };
-  }
-  return {};
+export function profileOverrides(profile, env = {}) {
+  /** @type {Record<string, unknown>} */
+  const overrides =
+    profile === "production"
+      ? {
+          name: PRODUCTION_WORKER,
+          workers_dev: false,
+          routes: [{ pattern: PRODUCTION_HOST, custom_domain: true }],
+        }
+      : {};
+  const store = secretsStoreBindings(env);
+  if (store.length) overrides.secrets_store_secrets = store;
+  return overrides;
 }
 
 /**
@@ -178,6 +224,12 @@ export function profileMismatch(config, profile, expectedMigrations, stagingName
   const classes = (config.durable_objects?.bindings ?? []).map((/** @type {any} */ b) => b.class_name).sort();
   if (JSON.stringify(classes) !== JSON.stringify(["TransferGate", "TransferRoom"])) {
     return "Durable Object bindings TransferRoom/TransferGate are missing";
+  }
+  const store = config.secrets_store_secrets;
+  if (store !== undefined) {
+    if (!Array.isArray(store)) return "secrets_store_secrets must be a list";
+    const unknown = store.filter((/** @type {any} */ b) => !STORE_BINDINGS.includes(b?.binding) || !b?.store_id || !b?.secret_name);
+    if (unknown.length) return `secrets_store_secrets has bindings the app does not read (use ${STORE_BINDINGS.join(", ")})`;
   }
   const rootOnly = ROOT_ONLY_KEYS.filter((key) => key in config);
   if (rootOnly.length) return `the generated config must not carry ${rootOnly.join(", ")} (the deploy would build again)`;

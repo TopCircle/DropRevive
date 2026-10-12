@@ -21,6 +21,8 @@ import {
   drivesEnabled,
   envValue,
   resolveClientIds,
+  type StoreKey,
+  type ValueSource,
 } from "./runtime-config.ts";
 
 /** Same host as scripts/wrangler-profile.mjs PRODUCTION_HOST (a test keeps them equal). */
@@ -42,6 +44,8 @@ export type SetupItem = {
   state: ItemState;
   /** Public client IDs only; secrets never carry a value. */
   value?: string;
+  /** Where the value came from (Secrets Store, Worker secret, build value, not set, store error). */
+  source: ValueSource;
 };
 
 export type DriveReadiness = { google: boolean; microsoft: boolean };
@@ -85,7 +89,25 @@ export function clientConfig(env: ConfigEnv, requestUrl: string, build: BuildCli
   return { ...resolveClientIds(env, build), googleEnabled: drives.google, msEnabled: drives.microsoft };
 }
 
-export function setupStatus(env: ConfigEnv, requestUrl: string, build: BuildClientIds = {}): SetupStatus {
+/** Sources when the caller did not resolve through Secrets Store: Worker value, build ID or not set. */
+export function plainSources(env: ConfigEnv, build: BuildClientIds = {}): Record<StoreKey, ValueSource> {
+  const of = (value: string | undefined, fallback?: string): ValueSource =>
+    envValue(value) ? "worker" : envValue(fallback) ? "build" : "off";
+  return {
+    GOOGLE_CLIENT_ID: of(env.GOOGLE_CLIENT_ID, build.google),
+    GOOGLE_CLIENT_SECRET: of(env.GOOGLE_CLIENT_SECRET),
+    MS_CLIENT_ID: of(env.MS_CLIENT_ID, build.microsoft),
+    MS_CLIENT_SECRET: of(env.MS_CLIENT_SECRET),
+    DRIVE_COOKIE_KEY: of(env.DRIVE_COOKIE_KEY),
+  };
+}
+
+export function setupStatus(
+  env: ConfigEnv,
+  requestUrl: string,
+  build: BuildClientIds = {},
+  sources: Record<StoreKey, ValueSource> = plainSources(env, build),
+): SetupStatus {
   const origin = new URL(requestUrl).origin;
   const ids = resolveClientIds(env, build);
   const idState = (fromEnv: string | undefined, resolved: string): ItemState =>
@@ -97,21 +119,32 @@ export function setupStatus(env: ConfigEnv, requestUrl: string, build: BuildClie
   const originAllowed = isAllowedOrigin(origin, allowed, origin);
 
   const items: SetupItem[] = [
-    { key: "GOOGLE_CLIENT_ID", state: idState(env.GOOGLE_CLIENT_ID, ids.googleClientId), value: ids.googleClientId || undefined },
-    { key: "GOOGLE_CLIENT_SECRET", state: secret("GOOGLE_CLIENT_SECRET") },
-    { key: "MS_CLIENT_ID", state: idState(env.MS_CLIENT_ID, ids.msClientId), value: ids.msClientId || undefined },
-    { key: "MS_CLIENT_SECRET", state: secret("MS_CLIENT_SECRET") },
-    { key: "DRIVE_COOKIE_KEY", state: cookie === "missing" ? "off" : cookie },
+    {
+      key: "GOOGLE_CLIENT_ID",
+      state: idState(env.GOOGLE_CLIENT_ID, ids.googleClientId),
+      value: ids.googleClientId || undefined,
+      source: sources.GOOGLE_CLIENT_ID,
+    },
+    { key: "GOOGLE_CLIENT_SECRET", state: secret("GOOGLE_CLIENT_SECRET"), source: sources.GOOGLE_CLIENT_SECRET },
+    {
+      key: "MS_CLIENT_ID",
+      state: idState(env.MS_CLIENT_ID, ids.msClientId),
+      value: ids.msClientId || undefined,
+      source: sources.MS_CLIENT_ID,
+    },
+    { key: "MS_CLIENT_SECRET", state: secret("MS_CLIENT_SECRET"), source: sources.MS_CLIENT_SECRET },
+    { key: "DRIVE_COOKIE_KEY", state: cookie === "missing" ? "off" : cookie, source: sources.DRIVE_COOKIE_KEY },
     {
       key: "ALLOWED_ORIGINS",
       state: originMode === "same-origin" ? "same-origin" : originAllowed ? "ok" : "invalid",
+      source: envValue(env.ALLOWED_ORIGINS) ? "worker" : "off",
     },
   ];
   const drives = readyDrives(env, requestUrl, build);
   const ready = drives.google || drives.microsoft;
 
   if (SUMMARY_ONLY_HOSTS.includes(new URL(requestUrl).hostname)) {
-    const attention = items.filter((item) => item.state === "invalid").length;
+    const attention = items.filter((item) => item.state === "invalid" || item.source === "store-error").length;
     return { mode: "summary", ready, drives, attention };
   }
   return {

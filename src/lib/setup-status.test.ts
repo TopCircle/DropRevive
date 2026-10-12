@@ -168,3 +168,43 @@ test("summary host matches the production profile's host", () => {
   const host = /PRODUCTION_HOST = "([^"]+)"/.exec(profile)?.[1];
   assert.deepEqual(SUMMARY_ONLY_HOSTS, [host]);
 });
+
+test("each item reports its source; secrets never carry a value", async () => {
+  const { clearStoreCache, resolveConfigEnv } = await import("./runtime-config.ts");
+  clearStoreCache();
+  const resolved = await resolveConfigEnv(
+    {
+      SS_GOOGLE_CLIENT_SECRET: { get: async () => "g-store-secret" },
+      SS_MS_CLIENT_SECRET: { get: async () => Promise.reject(new Error("not found")) },
+      MS_CLIENT_SECRET: "m-worker-secret",
+      MS_CLIENT_ID: "m-id",
+      DRIVE_COOKIE_KEY: KEY,
+    },
+    { google: "g-build" },
+  );
+  const status = setupStatus(resolved.env, `${SITE}/setup`, { google: "g-build" }, resolved.sources);
+  assert.equal(status.mode, "details");
+  const bySource = Object.fromEntries((status as SetupDetails).items.map((item) => [item.key, item.source]));
+  assert.deepEqual(bySource, {
+    GOOGLE_CLIENT_ID: "build",
+    GOOGLE_CLIENT_SECRET: "store",
+    MS_CLIENT_ID: "worker",
+    MS_CLIENT_SECRET: "store-error",
+    DRIVE_COOKIE_KEY: "worker",
+    ALLOWED_ORIGINS: "off",
+  });
+  assert.deepEqual(status.drives, { google: true, microsoft: false });
+  const json = JSON.stringify(status);
+  for (const secret of ["g-store-secret", "m-worker-secret", KEY]) assert.equal(json.includes(secret), false, secret);
+  // On the summary host a store error needs attention.
+  const summary = setupStatus(resolved.env, "https://drop.habor.dpdns.org/setup", { google: "g-build" }, resolved.sources);
+  assert.equal(summary.mode === "summary" && summary.attention, 1);
+});
+
+test("without resolved sources: Worker / build / not set", () => {
+  const status = details({ GOOGLE_CLIENT_SECRET: "s", ALLOWED_ORIGINS: SITE }, `${SITE}/setup`, { microsoft: "m-build" });
+  assert.deepEqual(
+    status.items.map((item) => item.source),
+    ["off", "worker", "build", "off", "off", "worker"],
+  );
+});

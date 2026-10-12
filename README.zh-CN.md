@@ -87,6 +87,8 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 | `DRIVE_COOKIE_KEY` | 刷新令牌 cookie 的 AES-GCM 密钥 | 32 随机字节的 base64：`openssl rand -base64 32`。两个网盘都要用 |
 | `ALLOWED_ORIGINS` | 允许网盘登录和局域网配对的站点地址 | 可选。不设或 `none`：只允许同源（站点自己的地址，workers.dev 或自定义域名）。设了：严格名单，逗号分隔，例如 `https://droprevive.you.workers.dev,https://drop.example.com`。全是格式不对的条目时一律拒绝 |
 
+想在同一个 Cloudflare 账号的几个 Worker 之间共用这些值？设构建变量 `DROP_SECRETS_STORE_ID`，把值放进 Cloudflare Secrets Store，见[指南里的 Secrets Store 一节](docs/self-host.zh-CN.md#可选cloudflare-secrets-store)。默认不启用。
+
 这份清单也在 [`.dev.vars.example`](.dev.vars.example) 里，那是本机开发用的模板，每一行都注释掉了。
 
 | 命令 | 作用 |
@@ -109,7 +111,7 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 
 - [参与开发](CONTRIBUTING.md) · [架构说明](docs/architecture.zh-CN.md)（[English](docs/architecture.md)）· [安全策略](SECURITY.md)
 - GitHub Actions 会在 push 和 pull request 时运行类型检查、测试、lint 和构建；CI 不使用部署密钥。
-- `npm test` 先跑脚本测试，再跑单元和集成测试：传送协议和局域网房间、扫码辅助逻辑、网盘登录经纪、跨标签页续签，以及网盘 store（同步、删除、令牌过期）。写这段时共有 31 个脚本测试加 295 个其他测试；lint 保持 0 error、0 warning。
+- `npm test` 先跑脚本测试，再跑单元和集成测试：传送协议和局域网房间、扫码辅助逻辑、网盘登录经纪、跨标签页续签，以及网盘 store（同步、删除、令牌过期）。写这段时共有 34 个脚本测试加 301 个其他测试；lint 保持 0 error、0 warning。
 - 交流和提问：项目的 Telegram 群组 <https://t.me/droprevive>。安全问题请私下报告，见 [SECURITY.md](SECURITY.md)。
 - `wrangler.jsonc` 是公开配置。正式站是 `scripts/wrangler-profile.mjs` 里的一个构建配置；`npm test` 会检查公开、正式、测试站三套配置生成得对不对。
 

@@ -137,7 +137,7 @@ Notes:
 | Cache Storage (Service Worker) | Offline shell; system-share payload staged in `droprevive-share` until the app opens | This origin |
 | Durable Object `TransferRoom` | Transfer room: code, both random tokens, device names, phase; deleted on expiry | Worker only |
 | Durable Object `TransferGate` | `create:IP` / `join:IP` one-minute window counters; deleted when stale | Worker only |
-| Worker secrets | `ALLOWED_ORIGINS`, `GOOGLE_CLIENT_SECRET`, `MS_CLIENT_SECRET`, `DRIVE_COOKIE_KEY` | Worker only; not in the frontend bundle or `wrangler.jsonc` `vars`. `/setup` shows only whether each is set |
+| Worker secrets | `ALLOWED_ORIGINS`, `GOOGLE_CLIENT_SECRET`, `MS_CLIENT_SECRET`, `DRIVE_COOKIE_KEY` | Worker only; not in the frontend bundle or `wrangler.jsonc` `vars`. `/setup` shows only whether each is set and its source. Optionally from Cloudflare Secrets Store instead: bindings `SS_<KEY>` (added at build when `DROP_SECRETS_STORE_ID` is set) are read first, cached about 60 s per isolate; see `resolveConfigEnv` in `src/lib/runtime-config.ts` |
 | Worker secrets (public values) | `GOOGLE_CLIENT_ID`, `MS_CLIENT_ID` | Sent to the page during SSR (root loader) and by `GET /api/config`; fall back to build-time `VITE_*` IDs |
 
 Clearing local cache removes only the browser rows above; drive files remain. Deleting an item in the app removes the matching drive files.

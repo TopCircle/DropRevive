@@ -111,6 +111,17 @@ Reload `/setup`. When it lists a drive as on, open the site, Settings, and conne
 | `DRIVE_COOKIE_KEY` | [generated](#cookie-key) | both drives |
 | `ALLOWED_ORIGINS` | your site address(es) | optional: only to allow other origins ([details](#allowed-origins)) |
 
+### Optional: Cloudflare Secrets Store
+
+To share the drive values between several Workers **in one Cloudflare account** (for example a site and its staging copy), keep them in [Secrets Store](https://developers.cloudflare.com/secrets-store/) (open beta: one store per account) instead of on each Worker. Off by default; the button deploy never needs it.
+
+1. Dashboard → **Secrets Store** → create the store if there is none, and copy its ID.
+2. Create these secrets with permission scope **Workers** (create them before step 3; a deploy that binds a missing secret can fail): `DROP_GOOGLE_CLIENT_ID`, `DROP_GOOGLE_CLIENT_SECRET`, `DROP_MS_CLIENT_ID`, `DROP_MS_CLIENT_SECRET`, `DROP_DRIVE_COOKIE_KEY`. Skip a drive you do not use.
+3. Worker → **Settings → Build → Variables and secrets** (build variables, not the Worker's runtime ones): add `DROP_SECRETS_STORE_ID` = the store ID. To give a Worker its own cookie key, also set `DROP_COOKIE_KEY_SECRET_NAME` (for example `DROP_DRIVE_COOKIE_KEY_STAGING`). Then **Retry build** or push. With `npm run deploy:self`, set the same variables in your shell.
+4. The build binds `SS_GOOGLE_CLIENT_ID`, `SS_GOOGLE_CLIENT_SECRET`, `SS_MS_CLIENT_ID`, `SS_MS_CLIENT_SECRET` and `SS_DRIVE_COOKIE_KEY`. Reload `/setup`: each item shows its source (Secrets Store, Worker secret, build value, not set, or store error).
+
+The Worker reads a Secrets Store value first and falls back to the Worker secret of the same name when the store value is empty or `none`. A store error (missing secret, wrong name, scope without Workers) counts as not set, so that drive stays off until it is fixed. Store values are cached for about a minute, so a rotated value can take that long to apply. `ALLOWED_ORIGINS` stays a Worker secret (it differs per site). Deploying needs a role or API token that can bind Secrets Store secrets (Super Administrator, Secrets Store Deployer, or Account Secrets Store Edit).
+
 ## Your own domain
 
 1. The domain's zone must be on your Cloudflare account. Worker → **Settings → Domains & Routes → Add → Custom domain**, e.g. `drop.example.com`.

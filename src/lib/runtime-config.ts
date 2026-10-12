@@ -76,9 +76,122 @@ export function drivesEnabled(env: ConfigEnv, build: BuildClientIds = {}): Drive
 /** What the page gets: the public IDs plus whether each drive can actually sign in here. */
 export type ClientConfig = ClientIds & { googleEnabled: boolean; msEnabled: boolean };
 
-/** Only the keys this app reads, from `process.env` (Workers) or any record. */
-export function pickConfigEnv(source: Record<string, string | undefined>): ConfigEnv {
+/** Only the keys this app reads, as plain strings, from the Worker env or any record. */
+export function pickConfigEnv(source: Record<string, unknown>): ConfigEnv {
   const env: ConfigEnv = {};
-  for (const key of CONFIG_KEYS) env[key] = source[key];
+  for (const key of CONFIG_KEYS) {
+    const value = source[key];
+    env[key] = typeof value === "string" ? value : undefined;
+  }
   return env;
+}
+
+/**
+ * Settings that may come from Cloudflare Secrets Store (account-level, shared between Workers of
+ * one account). ALLOWED_ORIGINS is per site and not secret, so it stays a plain Worker setting.
+ */
+export const STORE_KEYS = [
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "MS_CLIENT_ID",
+  "MS_CLIENT_SECRET",
+  "DRIVE_COOKIE_KEY",
+] as const;
+export type StoreKey = (typeof STORE_KEYS)[number];
+
+/** Binding name of a Secrets Store secret: SS_<KEY> (a binding must not share a Worker secret's name). */
+export const STORE_BINDING_PREFIX = "SS_";
+
+/**
+ * Where a value came from. store: Secrets Store binding. worker: Worker secret / variable.
+ * build: build-time VITE_* client ID. off: not set. store-error: the binding exists but get()
+ * threw (missing secret, wrong scope or store): treated as unset, so the drive stays off.
+ */
+export type ValueSource = "store" | "worker" | "build" | "off" | "store-error";
+
+export type ResolvedConfig = { env: ConfigEnv; sources: Record<StoreKey, ValueSource> };
+
+type SecretBinding = { get(): Promise<string> };
+
+function isSecretBinding(value: unknown): value is SecretBinding {
+  return Boolean(value) && typeof value === "object" && typeof (value as SecretBinding).get === "function";
+}
+
+/** Per-isolate cache of Secrets Store reads, so get() does not run on every request. */
+export const STORE_CACHE_MS = 60_000;
+type CacheEntry = { at: number; binding: SecretBinding; ok: boolean; value: string };
+const storeCache = new Map<string, CacheEntry>();
+
+/** Tests only: forget cached Secrets Store reads. */
+export function clearStoreCache(): void {
+  storeCache.clear();
+}
+
+async function readStore(
+  name: string,
+  binding: SecretBinding,
+  now: number,
+  ttlMs: number,
+): Promise<{ ok: boolean; value: string }> {
+  const cached = storeCache.get(name);
+  if (cached && cached.binding === binding && now - cached.at < ttlMs) return cached;
+  let entry: CacheEntry;
+  try {
+    const value = await binding.get();
+    entry = { at: now, binding, ok: true, value: typeof value === "string" ? value : "" };
+  } catch {
+    entry = { at: now, binding, ok: false, value: "" };
+  }
+  storeCache.set(name, entry);
+  return entry;
+}
+
+/**
+ * The settings this request uses, as plain strings, with where each came from. Per key: the
+ * Secrets Store binding SS_<KEY> if the Worker has one (a throw counts as unset: "store-error";
+ * an empty or `none` value falls through), else the plain Worker secret, else (client IDs only)
+ * the build value. ALLOWED_ORIGINS is always the plain Worker setting. Store reads are cached per
+ * isolate for STORE_CACHE_MS, so a rotated store value takes up to a minute to apply.
+ */
+export async function resolveConfigEnv(
+  source: Record<string, unknown>,
+  build: BuildClientIds = {},
+  options: { now?: number; ttlMs?: number } = {},
+): Promise<ResolvedConfig> {
+  const now = options.now ?? Date.now();
+  const ttlMs = options.ttlMs ?? STORE_CACHE_MS;
+  const plain = pickConfigEnv(source);
+  const env: ConfigEnv = { ALLOWED_ORIGINS: plain.ALLOWED_ORIGINS };
+  const sources = {} as Record<StoreKey, ValueSource>;
+  const buildValue: Partial<Record<StoreKey, string | undefined>> = {
+    GOOGLE_CLIENT_ID: build.google,
+    MS_CLIENT_ID: build.microsoft,
+  };
+  await Promise.all(
+    STORE_KEYS.map(async (key) => {
+      const name = STORE_BINDING_PREFIX + key;
+      const binding = source[name];
+      if (isSecretBinding(binding)) {
+        const read = await readStore(name, binding, now, ttlMs);
+        if (!read.ok) {
+          env[key] = undefined;
+          sources[key] = "store-error";
+          return;
+        }
+        if (envValue(read.value)) {
+          env[key] = read.value;
+          sources[key] = "store";
+          return;
+        }
+      }
+      if (envValue(plain[key])) {
+        env[key] = plain[key];
+        sources[key] = "worker";
+      } else {
+        env[key] = undefined;
+        sources[key] = envValue(buildValue[key]) ? "build" : "off";
+      }
+    }),
+  );
+  return { env, sources };
 }

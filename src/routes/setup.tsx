@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { SELF_HOST_DOC_URL, SELF_HOST_DOC_ZH_URL } from "@/lib/links";
-import type { ConfigKey } from "@/lib/runtime-config";
+import type { ConfigKey, ValueSource } from "@/lib/runtime-config";
 import { getSetupStatus } from "@/lib/server-config";
 import {
   AZURE_PERMISSIONS,
@@ -31,6 +31,14 @@ const LABELS: Record<ConfigKey, { zh: string; en: string; anchor: string }> = {
   MS_CLIENT_SECRET: { zh: "Azure 客户端密钥", en: "Azure client secret", anchor: "onedrive" },
   DRIVE_COOKIE_KEY: { zh: "Cookie 加密密钥（32 字节）", en: "Cookie key (32 bytes)", anchor: "cookie-key" },
   ALLOWED_ORIGINS: { zh: "允许的站点地址", en: "Allowed origins", anchor: "allowed-origins" },
+};
+
+const SOURCE_TEXT: Record<ValueSource, { zh: string; en: string; tone: string }> = {
+  store: { zh: "Secrets Store", en: "Secrets Store", tone: "text-subtle" },
+  worker: { zh: "Worker 密钥", en: "Worker secret", tone: "text-subtle" },
+  build: { zh: "构建时的值", en: "build value", tone: "text-subtle" },
+  off: { zh: "未设置", en: "not set", tone: "text-subtle" },
+  "store-error": { zh: "Secrets Store 读取失败", en: "store error", tone: "text-warn" },
 };
 
 const STATE_TEXT: Record<ItemState, { zh: string; en: string; tone: string; mark: string }> = {
@@ -127,6 +135,11 @@ function Details({ status }: { status: SetupDetails }) {
                   </span>
                 </div>
                 {item.value ? <div className="break-all font-mono text-xs text-subtle">{item.value}</div> : null}
+                <p data-source={item.source} className={`text-xs ${SOURCE_TEXT[item.source].tone}`}>
+                  来源 · source：{SOURCE_TEXT[item.source].zh}
+                  {SOURCE_TEXT[item.source].zh === SOURCE_TEXT[item.source].en ? "" : ` · ${SOURCE_TEXT[item.source].en}`}
+                </p>
+                {item.source === "store-error" ? <StoreErrorHint item={item.key} /> : null}
                 <Hint item={item.key} state={item.state} status={status} />
               </div>
               <span className={`shrink-0 text-xs ${state.tone}`}>
@@ -235,6 +248,16 @@ function Hint({ item, state, status }: { item: ConfigKey; state: ItemState; stat
     return <p className="text-xs text-subtle">Worker 里没设，用的是构建时写入的值 · Not set on the Worker; using the build-time value</p>;
   }
   return null;
+}
+
+function StoreErrorHint({ item }: { item: ConfigKey }) {
+  return (
+    <p className="text-xs text-warn">
+      绑定 <code className="font-mono">SS_{item}</code> 读不到值（密钥不存在、名字不对，或权限范围没选 Workers），按未设置处理 · The{" "}
+      <code className="font-mono">SS_{item}</code> binding could not be read (missing secret, wrong name, or scope without Workers), so it
+      counts as not set.
+    </p>
+  );
 }
 
 function CopyRow({ label, value }: { label: string; value: string }) {

@@ -15,6 +15,7 @@ import {
   profileFrom,
   profileMismatch,
   profileOverrides,
+  secretsStoreBindings,
   stripPublicOnly,
   stripRootOnly,
 } from "./wrangler-profile.mjs";
@@ -228,4 +229,49 @@ test("package.json: deploy builds, then checks the public profile; every secret 
     assert.ok(pkg.cloudflare.bindings[name].description.length > 20, name);
     assert.match(pkg.cloudflare.bindings[name].description, /Optional/, name);
   }
+});
+
+const STORE_ID = "0123456789abcdef0123456789abcdef";
+
+test("Secrets Store bindings: off unless DROP_SECRETS_STORE_ID is set", () => {
+  assert.deepEqual(secretsStoreBindings({}), []);
+  assert.deepEqual(secretsStoreBindings({ DROP_SECRETS_STORE_ID: "  " }), []);
+  assert.equal("secrets_store_secrets" in profileOverrides("public", {}), false);
+  assert.equal("secrets_store_secrets" in profileOverrides("production", {}), false);
+  // The default (no env argument) is what the tracked profiles produce: no bindings.
+  assert.equal("secrets_store_secrets" in profileOverrides("production"), false);
+  assert.equal("secrets_store_secrets" in tracked, false);
+});
+
+test("Secrets Store bindings: SS_<KEY> to the DROP_* secret names, cookie name overridable", () => {
+  assert.deepEqual(secretsStoreBindings({ DROP_SECRETS_STORE_ID: STORE_ID }), [
+    { binding: "SS_GOOGLE_CLIENT_ID", store_id: STORE_ID, secret_name: "DROP_GOOGLE_CLIENT_ID" },
+    { binding: "SS_GOOGLE_CLIENT_SECRET", store_id: STORE_ID, secret_name: "DROP_GOOGLE_CLIENT_SECRET" },
+    { binding: "SS_MS_CLIENT_ID", store_id: STORE_ID, secret_name: "DROP_MS_CLIENT_ID" },
+    { binding: "SS_MS_CLIENT_SECRET", store_id: STORE_ID, secret_name: "DROP_MS_CLIENT_SECRET" },
+    { binding: "SS_DRIVE_COOKIE_KEY", store_id: STORE_ID, secret_name: "DROP_DRIVE_COOKIE_KEY" },
+  ]);
+  const custom = secretsStoreBindings({ DROP_SECRETS_STORE_ID: STORE_ID, DROP_COOKIE_KEY_SECRET_NAME: "DROP_DRIVE_COOKIE_KEY_STAGING" });
+  assert.equal(custom.at(-1).secret_name, "DROP_DRIVE_COOKIE_KEY_STAGING");
+  assert.throws(() => secretsStoreBindings({ DROP_SECRETS_STORE_ID: "not-an-id" }), /32-character/);
+  assert.throws(() => secretsStoreBindings({ DROP_SECRETS_STORE_ID: STORE_ID, DROP_COOKIE_KEY_SECRET_NAME: "a b" }), /without spaces/);
+});
+
+test("Secrets Store opt-in builds still pass their profile checks", () => {
+  const env = { DROP_SECRETS_STORE_ID: STORE_ID };
+  const withStore = (profile) =>
+    stripRootOnly(
+      mergeLikeNitro(
+        { main: "index.mjs", assets: { binding: "ASSETS", directory: "../public" } },
+        mergeLikeNitro(profileOverrides(profile, env), tracked),
+      ),
+    );
+  const pub = withStore("public");
+  assert.equal(pub.secrets_store_secrets.length, 5);
+  assert.equal(profileMismatch(pub, "public", tracked.migrations), null);
+  const prod = inProductionOrder(stripPublicOnly(withStore("production")));
+  assert.equal(profileMismatch(prod, "production", tracked.migrations), null);
+  // Bindings the app does not read are refused.
+  const bad = { ...pub, secrets_store_secrets: [{ binding: "SS_OTHER", store_id: STORE_ID, secret_name: "X" }] };
+  assert.match(profileMismatch(bad, "public", tracked.migrations), /does not read/);
 });
