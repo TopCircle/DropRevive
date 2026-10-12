@@ -4,6 +4,8 @@ import { Cloud, Inbox, PanelLeft, Plus, Radio, RefreshCw, Search, Settings, Tras
 import { type KeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SendMode } from "@/components/drop/send-mode";
+import { LanBadge } from "@/components/drop/lan-badge";
+import { useLanOpenRequests } from "@/components/drop/lan-session-store";
 import { PreviewStage } from "@/components/drop/preview-dialog";
 import { useLongPress } from "@/components/drop/use-long-press";
 import { OverlayScrollbar } from "@/components/drop/overlay-scrollbar";
@@ -239,7 +241,6 @@ export function DesktopShell({
   const [scope, setScope] = useState<Scope>(ALL_SCOPE);
   useScopeFallback(scope, setScope);
   const [surface, setSurface] = useState<HomeSurface>("inbox");
-  const [holdLan, setHoldLan] = useState(false);
   const [rail, setRail] = useState<"expanded" | "collapsed">("expanded");
   const pinned = useRef(false);
   // Search inside the current view only. It belongs to the view it was typed in, so another
@@ -302,8 +303,12 @@ export function DesktopShell({
     if (modeForTransferSearch(window.location.search) === "direct") setSurface("lan");
   }, []);
 
+  useLanOpenRequests(() => {
+    setSurface("lan");
+    setSearch((current) => ({ ...current, open: false, query: "" }));
+  });
+
   function selectInbox(next: Scope) {
-    if (surface === "lan" && holdLan && !window.confirm(t("transfer.leaveUnsaved"))) return;
     setSurface("inbox");
     setScope(next);
   }
@@ -409,7 +414,7 @@ export function DesktopShell({
           thin overlay thumb on the window edge (OverlayScrollbar); spacers keep the first / last item clear of both. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {surface === "lan" && (
-          <SendMode frameClassName={COLUMN} mode="lan" seed={null} scope={scope} onLeaveToInbox={() => selectInbox(scope)} onHold={setHoldLan} />
+          <SendMode frameClassName={COLUMN} mode="lan" seed={null} scope={scope} onLeaveToInbox={() => selectInbox(scope)} />
         )}
         {/* Stay mounted while LAN is open so a cloud draft is still there when the user comes back. */}
         <div className={surface === "inbox" ? "relative min-h-0 flex-1" : "hidden"}>
@@ -611,6 +616,7 @@ export function DriveNav({
         >
           <Radio className="size-4 shrink-0" />
           {!collapsed && t("nav.lan")}
+          <LanBadge collapsed={collapsed} />
         </button>
       </div>
     </div>

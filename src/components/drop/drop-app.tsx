@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SendMode } from "@/components/drop/send-mode";
+import { useLanOpenRequests } from "@/components/drop/lan-session-store";
 import { DesktopShell, DriveNav, type HomeSurface, type Scope } from "@/components/drop/desktop-shell";
 import { ALL_SCOPE, scopeLabel } from "@/components/drop/scope";
 import { useScopeFallback } from "@/components/drop/use-scope-fallback";
@@ -62,7 +63,6 @@ export function DropApp() {
   const [scope, setScope] = useState<Scope>(ALL_SCOPE);
   useScopeFallback(scope, setScope);
   const [surface, setSurface] = useState<HomeSurface>("inbox");
-  const [holdLan, setHoldLan] = useState(false);
   const [seed, setSeed] = useState<ShareSeed | null>(null);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const { t } = useI18n();
@@ -234,12 +234,16 @@ export function DropApp() {
   const connected = Boolean(google || microsoft);
 
   function selectInbox(next: Scope) {
-    if (surface === "lan" && holdLan && !window.confirm(t("transfer.leaveUnsaved"))) return;
     setSurface("inbox");
     setScope(next);
     setSelecting(false);
     setDrawer(false);
   }
+
+  // Mobile only: on desktop, DesktopShell answers these itself.
+  useLanOpenRequests(() => {
+    if (layout !== "desktop") selectLan();
+  });
 
   function selectLan() {
     setSurface("lan");
@@ -344,7 +348,6 @@ export function DropApp() {
                   seed={null}
                   scope={scope}
                   onLeaveToInbox={() => selectInbox(scope)}
-                  onHold={setHoldLan}
                 />
             </div>
           ) : (

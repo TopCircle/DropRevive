@@ -6,6 +6,7 @@ import { lostSocketNeedsFail } from "./panel-flow.ts";
 import { encodeSignal, type ManifestFile, type ServerSignal, type SignalPayload } from "./protocol.ts";
 import { decideLinkFault, type LinkFault } from "./recover.ts";
 import { createRecovery } from "./recovery.ts";
+import { visibleNudge } from "./session-state.ts";
 import { browserPeer, closedSession, connectSession, type DataChannelLike, type PeerLike, type Session } from "./session.ts";
 
 export type TransferPhase = "idle" | "hosting" | "joining" | "connected" | "offering" | "confirm" | "sending" | "receiving" | "failed";
@@ -58,6 +59,8 @@ export type LanLink = {
   sendLease(): void;
   syncLease(): void;
   applyFault(fault: LinkFault): void;
+  /** The tab is visible again: start recovery if the socket, channel or peer dropped while hidden. */
+  nudge(): void;
 };
 
 export function freshLink(): TransferLink {
@@ -506,5 +509,20 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     sendLease,
     syncLease,
     applyFault,
+    nudge() {
+      const link = linkRef.current;
+      if (!link.alive || link.quiet) return;
+      const state = link.socket?.readyState;
+      const socket =
+        state === undefined ? "none" : state === WebSocket.OPEN ? "open" : state === WebSocket.CONNECTING ? "connecting" : "closed";
+      const fault = visibleNudge({
+        opened: link.opened,
+        finished: link.finished,
+        socket,
+        channel: link.channel?.readyState,
+        peer: link.peer?.connectionState,
+      });
+      if (fault) applyFault(fault);
+    },
   };
 }
