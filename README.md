@@ -22,7 +22,14 @@ When both devices are nearby and both have DropRevive open, use temporary LAN tr
 
 **Scanning the QR code with a phone.** The in-page scanner uses the browser's `BarcodeDetector` when it exists and falls back to a bundled jsQR decoder (loaded on demand) when it is missing, throws, or stays silent for a few seconds. `BarcodeDetector` can be present yet useless, for example in Android browsers without Google services, which is why the fallback does not depend on it being absent. The camera asks for 1280x720 at 30 fps, switches on continuous autofocus where the browser supports it, offers a torch button when the camera has one, and tap-to-focus where supported. The viewfinder fills the panel width. Problems (permission denied, no camera, a QR from another site, nothing read after 10 seconds) show as short toasts, never as text over the picture. You can always type the 8-character code instead. To see what the scanner is doing on a device, open the site with `?scandebug=1` (see [Contributing](CONTRIBUTING.md)).
 
-Pairing needs access to the site. File bytes do not go through the Worker. There is no LAN auto-discovery and no server relay. If the link fails, switch to cloud. Max 32 MiB per file, 64 MiB per batch, 32 KiB for text. Keep the page in the foreground while transferring. Save each received file with a tap when done.
+Pairing needs access to the site. File bytes do not go through the Worker. There is no LAN auto-discovery and no server relay. If the link fails, switch to cloud. Max 32 MiB per file, 64 MiB per batch, 32 KiB for text. Save each received file with a tap when done.
+
+The session belongs to the browser tab, not the LAN page: you can switch to the inbox, a drive or settings and come back still connected. While the LAN page is closed, the LAN nav item shows a dot when linked and a count of offers and unsaved files, and toasts announce new offers and received files; offers always wait for you to accept. The session ends only when you tap 断开 (disconnect), close the tab, or the other side leaves:
+
+- **Intentional leave** (断开 or closing the tab) sends a bye. Both sides go back to the start screen at once. If you still have unsaved received files, 断开 asks first; when the *other* side leaves, your unsaved files stay (with their batch) and a notice says so.
+- **Network drop** (no bye): the link shows 重连中 and keeps trying, backing off from 1 s to 30 s, for up to 10 minutes. The room on the server is kept alive for that window. After 10 minutes the peer counts as gone and the session clears, keeping unsaved files.
+- Received files live in the tab's memory until saved or removed (移除); there is a warning once more than 128 MiB is unsaved, and the timeline keeps the latest 200 entries (never dropping anything unsaved or in progress).
+- Phones may pause or kill a background tab and its WebRTC link. A short pause recovers when you come back; a long one can end the session. Keep the page open on phones during a transfer.
 
 What works today:
 
@@ -111,7 +118,7 @@ Maintainer client IDs are registered only for `https://drop.habor.dpdns.org`. Th
 
 - [Contributing](CONTRIBUTING.md) · [Architecture](docs/architecture.md) ([中文](docs/architecture.zh-CN.md)) · [Security policy](SECURITY.md)
 - GitHub Actions runs typecheck, tests, lint and build on pushes and pull requests. CI does not use deployment secrets.
-- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and LAN rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 34 script tests plus 301 others; lint is kept at 0 errors and 0 warnings.
+- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and LAN rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 34 script tests plus 323 others; lint is kept at 0 errors and 0 warnings.
 - Community and questions: the project's Telegram group, <https://t.me/droprevive>. Report security problems privately, see [SECURITY.md](SECURITY.md).
 - `wrangler.jsonc` is the public profile. The production site is a build profile in `scripts/wrangler-profile.mjs`; `npm test` checks that the public, production and staging configs come out as expected.
 

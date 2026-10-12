@@ -219,3 +219,20 @@ Notes:
 - `BarcodeDetector` can exist and still fail, for example in Android browsers without Google services; that is why the fallback also triggers on repeated errors and on a silent native decoder, not only when the API is missing. iOS Safari has no `BarcodeDetector` at all and always uses jsQR.
 - `?scandebug=1` shows a diagnostic overlay (decoder, formats, camera capabilities, last error and result). It is hidden by default.
 - User-facing failures (permission denied, no camera, other site's code, nothing read after 10 s) are toasts or the panel's normal notice area, never text over the picture.
+
+## 7. LAN session lifecycle
+
+The session is owned by the tab, not by the panel. `src/lib/transfer/lan-session.ts` (a zustand store, created once per tab in `src/components/drop/lan-session-store.ts`) owns the room, the WebRTC link (`link.ts`), the timeline and the received files. `transfer-panel.tsx` only subscribes and calls actions; unmounting it closes the camera, nothing else. `lan-badge.tsx` shows the nav badge; toasts with an Open action stand in for the panel while it is closed. Pure helpers (timeline cap, unsaved totals, badge, visibility nudge) are in `session-state.ts`.
+
+| Event | What happens |
+| --- | --- |
+| 断开 | Confirm first if received files are unsaved. Send `{"t":"bye"}` on the data channel, then `cancel` to the room; the server closes both sockets with `peer-left` (`reason: "bye"`). Back to the start screen; everything is cleared |
+| Tab closed (`pagehide`) | Same bye + cancel, then the link is disposed. `beforeunload` asks only while sending/receiving or holding unsaved files |
+| Peer bye (data channel or `peer-left` `bye`) | Session cleared; unsaved files stay with their batch, plus a notice |
+| Drop without bye | 重连中; recovery as before (ICE restart, socket reconnect with 1 s → 30 s backoff). On `visibilitychange` to visible, `link.nudge()` reports a dropped socket/channel/peer so recovery starts at once |
+| No recovery within `RECONNECT_GRACE_MS` (10 min) | The client gives up, or the server alarm sends `peer-left` (`reason: "gone"`) to the side still connected. Session cleared, unsaved files kept, notice |
+| Server idle / hard expiry | As before (`ROOM_TTL_MS` 10 min idle, `MAX_SESSION_MS` 2 h). When a paired side drops, `markAbsent` pushes the room's expiry to at least the reconnect window plus 1 min (capped by the hard limit), so idle expiry cannot end the room first |
+
+Memory: received files are held as bytes in the store until saved or removed (移除); thumbnails (Blob URLs) are revoked on save, on remove and when the session ends; a warning fires once when unsaved bytes cross 128 MiB (`UNSAVED_WARN_BYTES`); the timeline keeps at most 200 entries (`MAX_TIMELINE`), never dropping open batches or ones with unsaved files.
+
+Limit: mobile browsers may freeze a background tab and drop its WebRTC link. Within the reconnect window it recovers when the tab is visible again; the OS can also kill the tab, which ends the session without a bye (the peer then waits out the window).
