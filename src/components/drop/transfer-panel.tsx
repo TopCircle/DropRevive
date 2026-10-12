@@ -345,7 +345,7 @@ export function TransferPanel({
     setNoteKey(key);
     setEntries((current) => {
       if (!sessionVisible(phaseForFail)) return current;
-      let nextEntries = current;
+      let nextEntries = next === "connected" ? reduceTimeline(current, { type: "clear-stale" }) : current;
       if (openBatchFails(key, phaseForFail)) nextEntries = reduceTimeline(nextEntries, { type: "fail-open" });
       const tone = key ? CONNECTION_NOTICES[key] : null;
       if (tone !== "reconnect") nextEntries = reduceTimeline(nextEntries, { type: "clear-reconnect" });
@@ -655,7 +655,12 @@ export function TransferPanel({
     }
   }
 
+  function clearStale() {
+    setEntries((current) => reduceTimeline(current, { type: "clear-stale" }));
+  }
+
   async function createRoom() {
+    clearStale();
     show("joining");
     const outcome = await takeRoomResponse(
       () =>
@@ -696,6 +701,7 @@ export function TransferPanel({
   }
 
   async function join(raw: string) {
+    clearStale();
     const roomCode = raw.trim().toUpperCase();
     if (!isRoomCode(roomCode)) {
       show("idle", t("transfer.badCode"));
@@ -1119,7 +1125,7 @@ export function TransferPanel({
                 link.control = "ready";
                 link.activeId = null;
                 forgetEnteredCode();
-                setEntries((current) => reduceTimeline(current, { type: "clear-end" }));
+                clearStale();
                 show("idle");
               }}
             >

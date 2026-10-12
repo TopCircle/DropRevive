@@ -155,3 +155,17 @@ test("the timeline follows new entries only while the reader is near the end", (
   assert.equal(stickToEnd(120, 200, 80), true);
   assert.equal(stickToEnd(0, 500, 100), false);
 });
+
+test("clear-stale drops fail and end notices but keeps batches and other notices", () => {
+  let entries: TimelineEntry[] = [];
+  entries = reduceTimeline(entries, { type: "offer", id: "a", at: 1, sender: "me", text: "", files: [], total: 0 });
+  entries = reduceTimeline(entries, { type: "status", id: "a", status: "done" });
+  entries = reduceTimeline(entries, { type: "notice", at: 2, tone: "fail", text: "failed" });
+  entries = reduceTimeline(entries, { type: "notice", at: 3, tone: "end", text: "peer left" });
+  entries = reduceTimeline(entries, { type: "notice", at: 4, tone: "info", text: "declined" });
+  entries = reduceTimeline(entries, { type: "clear-stale" });
+  assert.deepEqual(
+    entries.map((entry) => (entry.kind === "batch" ? `batch:${entry.status}` : `notice:${entry.tone}`)),
+    ["batch:done", "notice:info"],
+  );
+});
