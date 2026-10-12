@@ -17,6 +17,7 @@ import {
   stripPublicOnly,
   stripRootOnly,
 } from "./wrangler-profile.mjs";
+import { warnIfNoStoreBindings } from "./store-warning.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const profile = process.argv[2];
@@ -36,3 +37,4 @@ if (problem) {
   process.exit(1);
 }
 console.log(`check-profile ${profile}: ${generated.name} ok`);
+if (profile === "production") warnIfNoStoreBindings(generated, "DROP_DRIVE_COOKIE_KEY_PROD");

@@ -21,6 +21,7 @@ import {
   stripPublicOnly,
   stripRootOnly,
 } from "./wrangler-profile.mjs";
+import { warnIfNoStoreBindings } from "./store-warning.mjs";
 
 const name = (process.env.STAGING_WORKER ?? "").trim();
 if (!name) {
@@ -60,6 +61,7 @@ if (problem) {
   process.exit(1);
 }
 writeFileSync(stagingPath, text + "\n");
+warnIfNoStoreBindings(staging, "DROP_DRIVE_COOKIE_KEY_STAGING");
 
 const child = spawn("npx", ["wrangler", "deploy", "--config", stagingPath], {
   cwd: root,
