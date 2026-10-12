@@ -219,3 +219,20 @@ flowchart LR
 - `BarcodeDetector` 可能存在却读不出来，例如没有 Google 服务的安卓浏览器；所以兜底不只在 API 缺失时触发，原生解码器连续报错、或长时间没有任何输出时也会切到 jsQR。iOS Safari 根本没有 `BarcodeDetector`，一直用 jsQR。
 - `?scandebug=1` 会显示诊断浮层（解码器、支持的格式、摄像头能力、最近的错误和结果），默认隐藏。
 - 面向用户的失败提示（没给权限、没有摄像头、别的站点的码、10 秒什么都没读到）用 toast 或面板原有的提示区域，不会在画面上盖文字。
+
+## 7. 局域网直传会话的生命周期
+
+会话属于标签页，不属于面板。`src/lib/transfer/lan-session.ts`（zustand store，每个标签页在 `src/components/drop/lan-session-store.ts` 里创建一次）持有房间、WebRTC 连接（`link.ts`）、时间线和收到的文件。`transfer-panel.tsx` 只订阅状态、调用动作；面板卸载只关摄像头。`lan-badge.tsx` 显示导航徽标；面板没打开时用带「查看」按钮的提示代替。纯函数（时间线上限、未保存统计、徽标、回到前台的检查）在 `session-state.ts`。
+
+| 事件 | 结果 |
+| --- | --- |
+| 断开 | 有没保存的文件时先确认。先在数据通道发 `{"t":"bye"}`，再向房间发 `cancel`；服务器用 `peer-left`（`reason: "bye"`）关闭两端。回到初始界面，全部清空 |
+| 关标签页（`pagehide`） | 同样 bye + cancel，然后释放连接。`beforeunload` 只在收发中或有没保存的文件时询问 |
+| 对方 bye（数据通道或 `peer-left` `bye`） | 清空会话；没保存的文件连同所在那一批保留，并给出提示 |
+| 没有 bye 的中断 | 显示「重连中」；恢复逻辑照旧（ICE 重启、信令重连，间隔 1 秒到 30 秒退避）。标签页回到前台（`visibilitychange`）时 `link.nudge()` 检查断掉的信令 / 通道 / 对端，立即开始恢复 |
+| `RECONNECT_GRACE_MS`（10 分钟）内没恢复 | 客户端放弃，或服务器闹钟向还连着的一端发 `peer-left`（`reason: "gone"`）。清空会话，保留没保存的文件，给出提示 |
+| 服务器空闲 / 硬上限过期 | 照旧（`ROOM_TTL_MS` 空闲 10 分钟，`MAX_SESSION_MS` 2 小时）。已配对的一端掉线时，`markAbsent` 把房间过期时间推到至少重连窗口加 1 分钟（不超过硬上限），空闲过期不会先结束房间 |
+
+内存：收到的文件以字节形式存在 store 里，直到保存或「移除」；缩略图（Blob URL）在保存、移除和会话结束时释放；没保存的超过 128 MiB（`UNSAVED_WARN_BYTES`）时提醒一次；时间线最多 200 条（`MAX_TIMELINE`），进行中的批次和含未保存文件的批次不会被删。
+
+限制：手机浏览器可能冻结后台标签页并断开 WebRTC。在重连窗口内，回到前台会恢复；系统也可能直接结束标签页，这时没有 bye，对方要等满窗口。
