@@ -2,7 +2,8 @@ export const CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 export const CODE_LENGTH = 8;
 export const ROOM_TTL_MS = 10 * 60 * 1000;
 export const MAX_SESSION_MS = 2 * 60 * 60 * 1000;
-export const RECONNECT_GRACE_MS = 15_000;
+/** How long a dropped peer may take to come back before it counts as gone (client recovery and server). */
+export const RECONNECT_GRACE_MS = 10 * 60 * 1000;
 export const ICE_SETTLE_MS = 5_000;
 export const LEASE_INTERVAL_MS = 60_000;
 export const MAX_DEVICE_NAME = 40;

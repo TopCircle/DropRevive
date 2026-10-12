@@ -14,6 +14,7 @@ export function TransferThread({
   onAccept,
   onReject,
   onSave,
+  onDismiss,
 }: {
   entries: TimelineEntry[];
   saves: ThreadFile[];
@@ -22,6 +23,7 @@ export function TransferThread({
   onAccept: () => void;
   onReject: () => void;
   onSave: (file: ThreadFile) => void;
+  onDismiss?: (id: string) => void;
 }) {
   const { t } = useI18n();
   const saveById = new Map(saves.map((file) => [file.id, file]));
@@ -45,6 +47,7 @@ export function TransferThread({
               onAccept={onAccept}
               onReject={onReject}
               onSave={onSave}
+              onDismiss={onDismiss}
             />
           </li>
         ),
@@ -67,6 +70,7 @@ function BatchCard({
   onAccept,
   onReject,
   onSave,
+  onDismiss,
 }: {
   entry: TimelineBatch;
   saveById: Map<string, ThreadFile>;
@@ -75,6 +79,7 @@ function BatchCard({
   onAccept: () => void;
   onReject: () => void;
   onSave: (file: ThreadFile) => void;
+  onDismiss?: (id: string) => void;
 }) {
   const { t } = useI18n();
   const when = formatWhen(new Date(entry.at).toISOString());
@@ -109,6 +114,11 @@ function BatchCard({
                 {entry.direction === "in" && entry.status === "done" && saved && (
                   <Button variant="secondary" className="h-auto max-w-full min-h-11 whitespace-normal wrap-anywhere py-2 text-left" onClick={() => onSave(saved)}>
                     {savedIds.has(file.id) ? t("transfer.saved", { name: file.name }) : t("transfer.saveOne", { name: file.name })}
+                  </Button>
+                )}
+                {entry.direction === "in" && entry.status === "done" && saved && onDismiss && (
+                  <Button variant="ghost" size="sm" onClick={() => onDismiss(file.id)}>
+                    {t("transfer.dismiss")}
                   </Button>
                 )}
                 </span>

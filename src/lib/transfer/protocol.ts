@@ -32,7 +32,8 @@ export type ServerSignal =
   | { type: "peer"; deviceName: string }
   | { type: "signal"; payload: SignalPayload }
   | { type: "rejected"; reason: "bad-token" | "full" | "expired" | "closed" | "too-large" }
-  | { type: "peer-left" }
+  /** bye: the other side chose to leave; gone: it did not come back within the reconnect window. */
+  | { type: "peer-left"; reason?: "bye" | "gone" }
   | { type: "expired"; reason: "invite" | "idle" | "hard" };
 
 const encoder = new TextEncoder();

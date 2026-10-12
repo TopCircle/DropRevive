@@ -13,7 +13,6 @@ export function SendMode({
   mode,
   frameClassName,
   onLeaveToInbox,
-  onHold,
 }: {
   compact?: boolean;
   seed?: { key: number; text: string; files: File[] } | null;
@@ -22,7 +21,6 @@ export function SendMode({
   /** Desktop message column. The timeline scroller stays full-pane so its scrollbar matches the inbox. */
   frameClassName?: string;
   onLeaveToInbox?: () => void;
-  onHold?: (held: boolean) => void;
 }) {
   const { t } = useI18n();
   const google = useDropStore((state) => state.google);
@@ -66,7 +64,6 @@ export function SendMode({
         text={text}
         files={files}
         onUseCloud={onLeaveToInbox}
-        onHold={onHold}
         onAlsoCloud={driveConnected ? () => void saveToCloud() : undefined}
         onClearDraft={() => {
           setText("");

@@ -6,6 +6,7 @@ import { lostSocketNeedsFail } from "./panel-flow.ts";
 import { encodeSignal, type ManifestFile, type ServerSignal, type SignalPayload } from "./protocol.ts";
 import { decideLinkFault, type LinkFault } from "./recover.ts";
 import { createRecovery } from "./recovery.ts";
+import { visibleNudge } from "./session-state.ts";
 import { browserPeer, closedSession, connectSession, type DataChannelLike, type PeerLike, type Session } from "./session.ts";
 
 export type TransferPhase = "idle" | "hosting" | "joining" | "connected" | "offering" | "confirm" | "sending" | "receiving" | "failed";
@@ -58,6 +59,8 @@ export type LanLink = {
   sendLease(): void;
   syncLease(): void;
   applyFault(fault: LinkFault): void;
+  /** The tab is visible again: start recovery if the socket, channel or peer dropped while hidden. */
+  nudge(): void;
 };
 
 export function freshLink(): TransferLink {
@@ -130,6 +133,9 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
   let lastFault: LinkFault = "ws-close";
   let resend = 0;
   let leaseTimer = 0;
+  // Socket reconnects back off (1 s, 2 s, 4 s … 30 s) so a long outage does not spin.
+  let reconnectTimer = 0;
+  let reconnectTries = 0;
   const recovery = createRecovery({
     graceMs: RECONNECT_GRACE_MS,
     settleMs: ICE_SETTLE_MS,
@@ -160,6 +166,9 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     resend = 0;
     if (leaseTimer) window.clearInterval(leaseTimer);
     leaseTimer = 0;
+    if (reconnectTimer) window.clearTimeout(reconnectTimer);
+    reconnectTimer = 0;
+    reconnectTries = 0;
     recovery.clear();
   }
 
@@ -288,7 +297,25 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
   function reconnectSocket(): void {
     const link = linkRef.current;
     if (!link.role || !link.roomCode || !link.token) return;
-    if (link.socket?.readyState === WebSocket.CONNECTING) return;
+    if (link.socket?.readyState === WebSocket.CONNECTING || reconnectTimer) return;
+    if (reconnectTries > 0) {
+      const delay = Math.min(30_000, 1000 * 2 ** (reconnectTries - 1));
+      reconnectTries += 1;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = 0;
+        const live = linkRef.current;
+        if (!live.alive || live.finished || live.quiet) return;
+        reopenSocket();
+      }, delay);
+      return;
+    }
+    reconnectTries = 1;
+    reopenSocket();
+  }
+
+  function reopenSocket(): void {
+    const link = linkRef.current;
+    if (!link.role || !link.roomCode || !link.token) return;
     const previous = link.socket;
     if (previous) {
       previous.onopen = null;
@@ -477,6 +504,7 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     const socket = new WebSocket(socketUrl(roomCode, token));
     link.socket = socket;
     socket.onopen = () => {
+      reconnectTries = 0;
       const pending = linkRef.current.session;
       if (pending) void pending.then((session) => session.flush());
       noteRecovered();
@@ -506,5 +534,20 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     sendLease,
     syncLease,
     applyFault,
+    nudge() {
+      const link = linkRef.current;
+      if (!link.alive || link.quiet) return;
+      const state = link.socket?.readyState;
+      const socket =
+        state === undefined ? "none" : state === WebSocket.OPEN ? "open" : state === WebSocket.CONNECTING ? "connecting" : "closed";
+      const fault = visibleNudge({
+        opened: link.opened,
+        finished: link.finished,
+        socket,
+        channel: link.channel?.readyState,
+        peer: link.peer?.connectionState,
+      });
+      if (fault) applyFault(fault);
+    },
   };
 }

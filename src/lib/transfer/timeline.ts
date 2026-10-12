@@ -48,6 +48,7 @@ export const CONNECTION_NOTICES: Record<string, NoticeTone> = {
   "transfer.reconnecting": "reconnect",
   "transfer.linkLost": "end",
   "transfer.peerLeft": "end",
+  "transfer.peerGone": "end",
   "transfer.youLeft": "end",
   "transfer.idleEnded": "end",
   "transfer.hardEnded": "end",

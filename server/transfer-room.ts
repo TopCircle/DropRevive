@@ -189,7 +189,7 @@ export class TransferRoom extends DurableObject<Env> {
     if (decoded.type === "cancel") {
       this.ctx.storage.sql.exec("DELETE FROM room");
       await this.ctx.storage.deleteAlarm();
-      this.closeAll({ type: "peer-left" });
+      this.closeAll({ type: "peer-left", reason: "bye" });
       return;
     }
     if (decoded.type === "hello") return;
@@ -233,7 +233,7 @@ export class TransferRoom extends DurableObject<Env> {
     }
     if (decision.type === "announce") {
       const other: RoomRole = decision.absent === "host" ? "guest" : "host";
-      this.send(other, { type: "peer-left" });
+      this.send(other, { type: "peer-left", reason: "gone" });
       const next = markPresent(room, decision.absent);
       this.save(next);
       await this.ctx.storage.setAlarm(decision.until);
