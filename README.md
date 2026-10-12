@@ -134,3 +134,5 @@ npm run deploy:self     # build + deploy your own copy; refuses the maintainer's
 npm run deploy:production # updates https://drop.habor.dpdns.org only
 STAGING_WORKER=<name> npm run deploy:staging  # maintainers: deploys a test Worker on workers.dev; refuses without STAGING_WORKER
 ```
+
+Using Secrets Store? Every `deploy*` script rebuilds, so export `DROP_SECRETS_STORE_ID` (and `DROP_COOKIE_KEY_SECRET_NAME` if the Worker has its own cookie key) in the same shell first. Without them the deploy goes out with no Store bindings.

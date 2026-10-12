@@ -117,10 +117,10 @@ npx wrangler secret put GOOGLE_CLIENT_ID --name droprevive
 
 1. 后台 → **Secrets Store**，没有 store 就新建一个，复制它的 ID。
 2. 新建这些密钥，权限范围（Permission scope）选 **Workers**（要在第 3 步之前建好：绑定一个不存在的密钥可能会让部署失败）：`DROP_GOOGLE_CLIENT_ID`、`DROP_GOOGLE_CLIENT_SECRET`、`DROP_MS_CLIENT_ID`、`DROP_MS_CLIENT_SECRET`、`DROP_DRIVE_COOKIE_KEY`。不用的网盘可以跳过。
-3. Worker → **Settings → Build → Variables and secrets**（构建变量，不是 Worker 运行时的变量）：加 `DROP_SECRETS_STORE_ID` = store ID。想让某个 Worker 用自己的 Cookie 密钥，再设 `DROP_COOKIE_KEY_SECRET_NAME`（例如 `DROP_DRIVE_COOKIE_KEY_STAGING`）。然后 **Retry build** 或 push。用 `npm run deploy:self` 的话，在终端里设同样的变量。
+3. Worker → **Settings → Build → Variables and secrets**（构建变量，不是 Worker 运行时的变量）：加 `DROP_SECRETS_STORE_ID` = store ID。想让某个 Worker 用自己的 Cookie 密钥，再设 `DROP_COOKIE_KEY_SECRET_NAME`（例如 `DROP_DRIVE_COOKIE_KEY_STAGING`）。然后 **Retry build** 或 push。用 `npm run deploy:self` 的话，在终端里设同样的变量。绑定只在设了这些变量的构建里才有：没设变量就构建或部署，部署出去的 Worker 没有 `SS_*` 绑定，网盘会改用 Worker 密钥（没有就关掉）。
 4. 构建会绑定 `SS_GOOGLE_CLIENT_ID`、`SS_GOOGLE_CLIENT_SECRET`、`SS_MS_CLIENT_ID`、`SS_MS_CLIENT_SECRET` 和 `SS_DRIVE_COOKIE_KEY`。刷新 `/setup`：每一项都会显示来源（Secrets Store、Worker 密钥、构建时的值、未设置，或 Secrets Store 读取失败）。
 
-Worker 先读 Secrets Store 的值；store 里的值是空的或 `none` 时，改用同名的 Worker 密钥。读取失败（密钥不存在、名字不对、权限范围没选 Workers）按未设置处理，对应的网盘会关着，直到修好。Store 的值会缓存约一分钟，所以换了值最多要等这么久才生效。`ALLOWED_ORIGINS` 仍然是 Worker 密钥（每个站点不一样）。部署时用的角色或 API 令牌要能绑定 Secrets Store 密钥（Super Administrator、Secrets Store Deployer，或 Account Secrets Store Edit）。
+Worker 先读 Secrets Store 的值；store 里的值是空的或 `none` 时，改用同名的 Worker 密钥；客户端 ID 再退一步，用构建时打进去的值（`VITE_GOOGLE_CLIENT_ID`、`VITE_MS_CLIENT_ID`，如果有）。读取顺序：Secrets Store → Worker 密钥 → 构建时的值。读取失败（密钥不存在、名字不对、权限范围没选 Workers）按未设置处理，对应的网盘会关着，直到修好。Store 的值会缓存约一分钟，所以换了值最多要等这么久才生效。`ALLOWED_ORIGINS` 仍然是 Worker 密钥（每个站点不一样）。部署时用的角色或 API 令牌要能绑定 Secrets Store 密钥（Super Administrator、Secrets Store Deployer，或 Account Secrets Store Edit）。
 
 ## 用自己的域名
 
