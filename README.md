@@ -89,7 +89,7 @@ The list is also in [`.dev.vars.example`](.dev.vars.example); the button reads i
 | --- | --- |
 | `npm run dev` | Local dev at <http://localhost:8080> (localhost only; `HOST=0.0.0.0 npm run dev` for your LAN). Reads the six settings from the environment; without client IDs, drives show as unavailable |
 | `npm run build` | Build the public profile into `.output/` (Worker `droprevive`, `workers.dev`, no route) |
-| `npm run deploy` | Checks the build is the public profile (workers.dev on, no route, not `dropreceive`), then `wrangler deploy`. This is what the button runs after `npm run build`. Refuses while any of the six secrets is unset on the Worker (`secrets.required`) |
+| `npm run deploy` | Builds, checks the build is the public profile (workers.dev on, no route, not `dropreceive`), then `wrangler deploy`. This is what the button runs; it builds first, so it works even when the dashboard build command is empty. Refuses while any of the six secrets is unset on the Worker (`secrets.required`) |
 | `npm run deploy:self` | Build and deploy from your own machine. Refuses while the Worker is named `dropreceive` or a route points at `drop.habor.dpdns.org`; a `workers.dev`-only Worker or your own domain is fine |
 | `npm run deploy:production` | Maintainers only: builds the production profile (`DROP_PROFILE=production`, Worker `dropreceive`, custom domain `drop.habor.dpdns.org`) and checks the generated config before deploying |
 
@@ -123,7 +123,7 @@ npm run typecheck
 npm test
 npm run lint
 npm run build
-npm run deploy          # check the public build, then wrangler deploy (what the button runs)
+npm run deploy          # build, check the public profile, wrangler deploy (what the button runs)
 npm run deploy:self     # build + deploy your own copy; refuses the maintainer's Worker and domain
 npm run deploy:production # updates https://drop.habor.dpdns.org only
 STAGING_WORKER=<name> npm run deploy:staging  # maintainers: deploys a test Worker on workers.dev; refuses without STAGING_WORKER

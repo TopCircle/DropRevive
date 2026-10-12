@@ -24,6 +24,18 @@ test("jsonc comments are ignored and the maintainer host is recognized", () => {
   assert.match(refusalReason(MAINTAINER), /dropreceive/);
 });
 
+test("jsonc stripping leaves comment-like text inside strings alone", () => {
+  const text =
+    '{\n  // line\n  "rules": [{ "globs": ["**/*.mjs", "**/*.js"] }], /* block */\n  "url": "https://x//y"\n}';
+  assert.deepEqual(JSON.parse(stripJsonc(text)), {
+    rules: [{ globs: ["**/*.mjs", "**/*.js"] }],
+    url: "https://x//y",
+  });
+  assert.deepEqual(JSON.parse(stripJsonc('{ "a": "say \\"/* hi */\\"" }')), {
+    a: 'say "/* hi */"',
+  });
+});
+
 test("own name and own custom domain: allowed", () => {
   const config = own({ routes: [{ pattern: "drop.example.com", custom_domain: true }] });
   assert.equal(usesMaintainerRoute(config), false);

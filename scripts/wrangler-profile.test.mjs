@@ -9,24 +9,33 @@ import {
   PUBLIC_ONLY_KEYS,
   PUBLIC_WORKER,
   REQUIRED_SECRETS,
+  ROOT_ONLY_KEYS,
+  inProductionOrder,
   mergeLikeNitro,
   profileFrom,
   profileMismatch,
   profileOverrides,
   stripPublicOnly,
+  stripRootOnly,
 } from "./wrangler-profile.mjs";
 
 const tracked = JSON.parse(stripJsonc(readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8")));
-/** What nitro writes to .output/server/wrangler.json (main/assets added by nitro). */
+/** What nitro writes to .output/server/wrangler.json (main/assets overridden by nitro). */
 const generate = (profile) =>
-  mergeLikeNitro({ main: "index.mjs", assets: { directory: "../public" } }, mergeLikeNitro(profileOverrides(profile), tracked));
+  mergeLikeNitro(
+    { main: "index.mjs", assets: { binding: "ASSETS", directory: "../public" } },
+    mergeLikeNitro(profileOverrides(profile), tracked),
+  );
 
-/** check-profile.mjs production: the production build without the public-only keys. */
-const production = () => stripPublicOnly(generate("production"));
+/** check-profile.mjs public: the public build without the custom build. */
+const publicBuild = () => stripRootOnly(generate("public"));
 
-/** deploy-staging.mjs: the public build renamed, without the public-only keys. */
+/** check-profile.mjs production: the production build without the custom build and public-only keys. */
+const production = () => stripPublicOnly(stripRootOnly(generate("production")));
+
+/** deploy-staging.mjs: the public build renamed, without the public-only keys and the custom build. */
 function staging(name) {
-  const config = stripPublicOnly(structuredClone(generate("public")));
+  const config = stripRootOnly(stripPublicOnly(structuredClone(generate("public"))));
   config.name = name;
   delete config.routes;
   delete config.route;
@@ -44,6 +53,31 @@ test("tracked wrangler.jsonc is the public profile: droprevive on workers.dev, n
   assert.equal(JSON.stringify(tracked).includes(PRODUCTION_HOST), false);
 });
 
+test("a bare `wrangler deploy` from a clean checkout builds first and uploads nitro's output", () => {
+  assert.deepEqual(tracked.build, { command: "npm run build" });
+  assert.deepEqual(ROOT_ONLY_KEYS, ["build"]);
+  assert.equal(tracked.main, ".output/server/index.mjs");
+  assert.deepEqual(tracked.assets, { binding: "ASSETS", directory: ".output/public" });
+  // What nitro adds to the generated config for cloudflare_module, so both paths upload the same Worker.
+  assert.equal(tracked.no_bundle, true);
+  assert.deepEqual(tracked.rules, [{ type: "ESModule", globs: ["**/*.mjs", "**/*.js"] }]);
+  // The custom build must not rebuild through the deploy scripts.
+  assert.equal(tracked.build.command.includes("deploy"), false);
+});
+
+test("a generated config that still carries the custom build is refused in every profile", () => {
+  const raw = generate("public");
+  assert.ok("build" in raw);
+  assert.match(profileMismatch(raw, "public", tracked.migrations) ?? "", /build/);
+  const prod = stripPublicOnly(generate("production"));
+  assert.match(profileMismatch(prod, "production", tracked.migrations) ?? "", /build/);
+  const stage = { ...staging("example-staging"), build: tracked.build };
+  assert.match(profileMismatch(stage, "staging", tracked.migrations, "example-staging") ?? "", /build/);
+  for (const config of [publicBuild(), production(), staging("example-staging")]) {
+    for (const key of ROOT_ONLY_KEYS) assert.equal(key in config, false, key);
+  }
+});
+
 test("migration tags and Durable Object bindings stay what production already has", () => {
   assert.deepEqual(tracked.migrations, [
     { tag: "v1-transfer-room", new_sqlite_classes: ["TransferRoom", "TransferGate"] },
@@ -55,7 +89,7 @@ test("migration tags and Durable Object bindings stay what production already ha
 });
 
 test("public profile generates a workers.dev config with preview URLs off and all secrets required", () => {
-  const config = generate("public");
+  const config = publicBuild();
   assert.equal(profileMismatch(config, "public", tracked.migrations), null);
   assert.equal(config.name, PUBLIC_WORKER);
   assert.equal(config.workers_dev, true);
@@ -64,14 +98,14 @@ test("public profile generates a workers.dev config with preview URLs off and al
 });
 
 test("public check accepts the name the button picks (the repo name) but never dropreceive", () => {
-  const renamed = { ...generate("public"), name: "droprevive-deploy-test" };
+  const renamed = { ...publicBuild(), name: "droprevive-deploy-test" };
   assert.equal(profileMismatch(renamed, "public", tracked.migrations), null);
   assert.match(profileMismatch({ ...renamed, name: "dropreceive" }, "public", tracked.migrations) ?? "", /production/);
   assert.match(profileMismatch({ ...renamed, name: "" }, "public", tracked.migrations) ?? "", /no name/);
 });
 
 test("public check requires workers.dev on, no routes, preview URLs off, every secret declared", () => {
-  const base = generate("public");
+  const base = publicBuild();
   for (const workers_dev of [false, undefined]) {
     assert.match(profileMismatch({ ...base, workers_dev }, "public", tracked.migrations) ?? "", /workers_dev/);
   }
@@ -96,13 +130,46 @@ test("production profile generates dropreceive + custom domain + identical migra
   for (const key of PUBLIC_ONLY_KEYS) assert.equal(key in config, false, key);
   // Unstripped (check-profile.mjs not run) is refused.
   assert.match(profileMismatch(generate("production"), "production", tracked.migrations) ?? "", /must not carry/);
+  assert.match(
+    profileMismatch(stripRootOnly(generate("production")), "production", tracked.migrations) ?? "",
+    /must not carry/,
+  );
 });
 
 test("production and staging configs are exactly what they were before the button (b8d8e19)", () => {
   const keys = (config) => Object.keys(config).sort();
-  const expected = ["assets", "compatibility_date", "compatibility_flags", "durable_objects", "main", "migrations", "name", "routes", "workers_dev"];
+  const expected = [
+    "assets",
+    "compatibility_date",
+    "compatibility_flags",
+    "durable_objects",
+    "main",
+    "migrations",
+    "name",
+    "no_bundle",
+    "routes",
+    "rules",
+    "workers_dev",
+  ];
   assert.deepEqual(keys(production()), expected);
   assert.deepEqual(keys(staging("example-staging")), expected.filter((key) => key !== "routes"));
+});
+
+test("production keys are written in the order deployed before the button (b8d8e19)", () => {
+  assert.deepEqual(Object.keys(inProductionOrder(production())), [
+    "compatibility_date",
+    "name",
+    "compatibility_flags",
+    "workers_dev",
+    "routes",
+    "durable_objects",
+    "migrations",
+    "main",
+    "assets",
+    "no_bundle",
+    "rules",
+  ]);
+  assert.deepEqual(Object.keys(inProductionOrder({ z: 1, name: "a" })), ["name", "z"]);
 });
 
 test("staging is the public build renamed", () => {
@@ -112,9 +179,9 @@ test("staging is the public build renamed", () => {
 });
 
 test("a build for one profile is refused as another", () => {
-  assert.ok(profileMismatch(generate("public"), "production", tracked.migrations));
+  assert.ok(profileMismatch(publicBuild(), "production", tracked.migrations));
   assert.ok(profileMismatch(production(), "public", tracked.migrations));
-  assert.ok(profileMismatch(generate("public"), "staging", tracked.migrations, PUBLIC_WORKER));
+  assert.ok(profileMismatch(publicBuild(), "staging", tracked.migrations, PUBLIC_WORKER));
   const lost = { ...production(), migrations: [] };
   assert.match(profileMismatch(lost, "production", tracked.migrations) ?? "", /migrations/);
 });
@@ -146,9 +213,13 @@ test(".dev.vars.example declares exactly the required secrets, blank, and is tra
   assert.throws(() => execFileSync("git", ["check-ignore", "-q", ".dev.vars.example"], { cwd: root }), "must not be gitignored");
 });
 
-test("package.json: deploy checks the public profile; every secret has a description", () => {
+test("package.json: deploy builds, then checks the public profile; every secret has a description", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-  assert.equal(pkg.scripts.deploy, "node scripts/check-profile.mjs public && wrangler deploy");
+  // Builds itself, so the button works even when the dashboard build command is empty.
+  assert.equal(pkg.scripts.deploy, "npm run build && node scripts/check-profile.mjs public && wrangler deploy");
+  assert.equal(pkg.scripts.build, "vite build");
+  // The custom build in wrangler.jsonc must never call back into a deploy script.
+  assert.equal(/deploy|wrangler/.test(pkg.scripts.build), false);
   assert.match(pkg.scripts["deploy:production"], /DROP_PROFILE=production .*check-profile\.mjs production && wrangler deploy$/);
   assert.deepEqual(Object.keys(pkg.cloudflare.bindings).sort(), [...REQUIRED_SECRETS].sort());
   for (const name of REQUIRED_SECRETS) assert.ok(pkg.cloudflare.bindings[name].description.length > 20, name);

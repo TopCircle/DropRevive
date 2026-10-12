@@ -89,7 +89,7 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 | --- | --- |
 | `npm run dev` | 本地开发，<http://localhost:8080>（只监听本机；局域网访问用 `HOST=0.0.0.0 npm run dev`）。6 项设置从环境变量读取；没有 client ID 时网盘显示「未开通」 |
 | `npm run build` | 按公开配置构建到 `.output/`（Worker `droprevive`，`workers.dev`，无路由） |
-| `npm run deploy` | 先核对构建是公开配置（workers.dev 开启、无路由、不叫 `dropreceive`），再 `wrangler deploy`。部署按钮在 `npm run build` 之后跑的就是它。Worker 上 6 个密钥缺任何一个都会拒绝（`secrets.required`） |
+| `npm run deploy` | 先构建，再核对构建是公开配置（workers.dev 开启、无路由、不叫 `dropreceive`），再 `wrangler deploy`。部署按钮跑的就是它；它自己会先构建，所以后台构建命令为空也能部署。Worker 上 6 个密钥缺任何一个都会拒绝（`secrets.required`） |
 | `npm run deploy:self` | 在自己电脑上构建并部署。Worker 仍叫 `dropreceive`，或路由指向 `drop.habor.dpdns.org` 时拒绝；只用 `workers.dev` 或用你自己的域名都可以 |
 | `npm run deploy:production` | 仅维护者：按正式站配置构建（`DROP_PROFILE=production`，Worker `dropreceive`，自定义域名 `drop.habor.dpdns.org`），部署前核对生成的配置 |
 
@@ -123,7 +123,7 @@ npm run typecheck
 npm test
 npm run lint
 npm run build
-npm run deploy          # 核对公开构建后 wrangler deploy（部署按钮跑的就是它）
+npm run deploy          # 构建、核对公开配置，再 wrangler deploy（部署按钮跑的就是它）
 npm run deploy:self     # 构建并部署你自己的副本；拒绝维护者的 Worker 和域名
 npm run deploy:production # 只更新 https://drop.habor.dpdns.org
 STAGING_WORKER=<名字> npm run deploy:staging  # 维护者用：部署到 workers.dev 上的测试 Worker；没设 STAGING_WORKER 会拒绝

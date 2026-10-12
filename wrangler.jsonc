@@ -1,7 +1,10 @@
 // Public profile: what the Deploy to Cloudflare button and `npm run deploy` ship.
 // A workers.dev Worker with no route; add your own domain in the Cloudflare dashboard
 // (Workers > your Worker > Settings > Domains & Routes). See docs/self-host.md.
-// Keep `main` and `assets` out of this file: nitro fills them into the generated config.
+// `main`, `assets`, `no_bundle`, `rules` and `build` (bottom) only serve a bare `wrangler deploy` from a
+// clean checkout: wrangler runs `npm run build` first, then uploads nitro's output. A build writes
+// .output/server/wrangler.json (nitro overrides `main`/`assets` there; scripts/check-profile.mjs drops
+// `build`), and every later `wrangler deploy` follows nitro's .wrangler/deploy/config.json redirect to it.
 // The maintainer's production site is a build profile (DROP_PROFILE=production,
 // scripts/wrangler-profile.mjs), not this file.
 {
@@ -30,5 +33,13 @@
       { "name": "TRANSFER_GATE", "class_name": "TransferGate" }
     ]
   },
-  "migrations": [{ "tag": "v1-transfer-room", "new_sqlite_classes": ["TransferRoom", "TransferGate"] }]
+  "migrations": [{ "tag": "v1-transfer-room", "new_sqlite_classes": ["TransferRoom", "TransferGate"] }],
+  // Same values nitro writes into .output/server/wrangler.json (paths there are relative to it).
+  "main": ".output/server/index.mjs",
+  "assets": { "binding": "ASSETS", "directory": ".output/public" },
+  "no_bundle": true,
+  "rules": [{ "type": "ESModule", "globs": ["**/*.mjs", "**/*.js"] }],
+  // Wrangler custom build: when the Workers Builds build command is empty and the deploy command is
+  // the default `npx wrangler deploy`, wrangler still builds the site before uploading it.
+  "build": { "command": "npm run build" }
 }

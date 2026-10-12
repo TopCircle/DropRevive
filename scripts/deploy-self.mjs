@@ -3,25 +3,47 @@
  * Deploy this app to the deployer's own Cloudflare account.
  *
  * `npm run deploy:production` is the maintainer command for drop.habor.dpdns.org.
- * `npm run deploy` is a plain `wrangler deploy` of an existing build (what the Deploy to
- * Cloudflare button runs after `npm run build`). This command (`npm run deploy:self`)
+ * `npm run deploy` builds, checks the public profile and runs `wrangler deploy` (what the Deploy
+ * to Cloudflare button runs). This command (`npm run deploy:self`)
  * checks wrangler.jsonc, then builds and deploys. It refuses to run while the config
  * could still replace the maintainer's Worker: the Worker is named `dropreceive`, or a
  * route or custom domain points into the maintainer's zone. A workers.dev-only Worker
  * (`workers_dev: true`, no routes) is fine, and so is your own route or custom domain.
  */
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { stripRootOnly } from "./wrangler-profile.mjs";
 
 export const MAINTAINER_HOST = "drop.habor.dpdns.org";
 /** Any route in the maintainer's zone counts, not only the exact host. */
 export const MAINTAINER_ZONE = "habor.dpdns.org";
 export const MAINTAINER_WORKER = "dropreceive";
 
+/**
+ * JSONC to JSON: drops line and block comments outside strings, so a glob string such as the
+ * ESModule rule in wrangler.jsonc is not mistaken for a comment.
+ * @param {string} text
+ */
 export function stripJsonc(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"') {
+      let end = i + 1;
+      while (end < text.length && text[end] !== '"') end += text[end] === "\\" ? 2 : 1;
+      out += text.slice(i, end + 1);
+      i = end;
+    } else if (char === "/" && text[i + 1] === "/") {
+      while (i < text.length && text[i] !== "\n") i++;
+      out += "\n";
+    } else if (char === "/" && text[i + 1] === "*") {
+      const end = text.indexOf("*/", i + 2);
+      i = end === -1 ? text.length : end + 1;
+    } else out += char;
+  }
+  return out;
 }
 
 /**
@@ -109,6 +131,9 @@ if (isDirectRun()) {
     process.exit(1);
   }
   await run("npm", ["run", "build"], root);
+  // Drop wrangler.jsonc's custom build from the generated config, or `wrangler deploy` builds again.
+  const generatedPath = join(root, ".output/server/wrangler.json");
+  writeFileSync(generatedPath, JSON.stringify(stripRootOnly(JSON.parse(readFileSync(generatedPath, "utf8"))), null, 2));
   // wrangler.jsonc declares secrets.required, so a first deploy needs the values up front:
   // fill .dev.vars from .dev.vars.example and they are uploaded with the Worker.
   const secretsFile = join(root, ".dev.vars");

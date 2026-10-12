@@ -43,6 +43,54 @@ export function stripPublicOnly(config) {
   return copy;
 }
 
+/**
+ * Keys in wrangler.jsonc that only a bare `wrangler deploy` from a clean checkout uses (wrangler's
+ * custom build). No generated config keeps them: a deploy that follows the build would otherwise
+ * build again (for production, without the production environment). check-profile.mjs,
+ * deploy-staging.mjs and deploy-self.mjs drop them from .output/server/wrangler.json.
+ */
+export const ROOT_ONLY_KEYS = ["build"];
+
+/**
+ * A copy without the root-only keys.
+ * @param {Record<string, unknown>} config
+ * @returns {Record<string, unknown>}
+ */
+export function stripRootOnly(config) {
+  const copy = { ...config };
+  for (const key of ROOT_ONLY_KEYS) delete copy[key];
+  return copy;
+}
+
+/** Key order of the production config nitro generated before the button (b8d8e19). */
+export const PRODUCTION_KEY_ORDER = [
+  "compatibility_date",
+  "name",
+  "compatibility_flags",
+  "workers_dev",
+  "routes",
+  "durable_objects",
+  "migrations",
+  "main",
+  "assets",
+  "no_bundle",
+  "rules",
+];
+
+/**
+ * A copy with the keys in PRODUCTION_KEY_ORDER first (others after, in their order), so the written
+ * production config is byte-identical to the one deployed before the button.
+ * @param {Record<string, unknown>} config
+ * @returns {Record<string, unknown>}
+ */
+export function inProductionOrder(config) {
+  /** @type {Record<string, unknown>} */
+  const out = {};
+  for (const key of PRODUCTION_KEY_ORDER) if (key in config) out[key] = config[key];
+  for (const [key, value] of Object.entries(config)) if (!(key in out)) out[key] = value;
+  return out;
+}
+
 /** @typedef {"public" | "production"} Profile */
 
 /**
@@ -128,6 +176,8 @@ export function profileMismatch(config, profile, expectedMigrations, stagingName
   if (JSON.stringify(classes) !== JSON.stringify(["TransferGate", "TransferRoom"])) {
     return "Durable Object bindings TransferRoom/TransferGate are missing";
   }
+  const rootOnly = ROOT_ONLY_KEYS.filter((key) => key in config);
+  if (rootOnly.length) return `the generated config must not carry ${rootOnly.join(", ")} (the deploy would build again)`;
   const name = typeof config.name === "string" ? config.name.trim() : "";
   if (profile === "production") {
     if (name !== PRODUCTION_WORKER) return `name is ${config.name}, expected ${PRODUCTION_WORKER}`;

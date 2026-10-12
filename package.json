@@ -22,7 +22,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "deploy": "node scripts/check-profile.mjs public && wrangler deploy",
+    "deploy": "npm run build && node scripts/check-profile.mjs public && wrangler deploy",
     "deploy:production": "DROP_PROFILE=production VITE_GOOGLE_CLIENT_ID=707937606664-s6eipc0mvraf5pio6ukg1v3e61rhgs5a.apps.googleusercontent.com VITE_MS_CLIENT_ID=a367fd71-6087-4269-a942-2abf2694f8a1 npm run build && node scripts/check-profile.mjs production && wrangler deploy",
     "deploy:staging": "VITE_GOOGLE_CLIENT_ID=707937606664-s6eipc0mvraf5pio6ukg1v3e61rhgs5a.apps.googleusercontent.com VITE_MS_CLIENT_ID=a367fd71-6087-4269-a942-2abf2694f8a1 npm run build && node scripts/deploy-staging.mjs",
     "deploy:self": "node scripts/deploy-self.mjs",
