@@ -63,6 +63,12 @@ type LiveChannel = DataChannelLike & { maxMessageSize?: number; bufferedAmount?:
 
 const THUMB_MAX = 10 * 1024 * 1024;
 
+/** Sent over the data channel before an intentional disconnect, so the peer can tell it from a drop. */
+export const BYE = JSON.stringify({ t: "bye" });
+
+/** Notices after which the session is over for good: clear it back to the start screen. */
+const GONE_KEYS = new Set(["transfer.peerLeft", "transfer.peerGone", "transfer.linkLost"]);
+
 function messageLimit(channel: DataChannelLike): number {
   const max = (channel as LiveChannel).maxMessageSize;
   return typeof max === "number" && max > 0 ? max : ASSUMED_MAX_MESSAGE;
@@ -205,7 +211,40 @@ export function createLanSession(deps: LanDeps) {
       // The session is over: thumbnails go; received files stay saveable until saved or removed.
       revokeAll();
       if (!get().panelOpen && message) deps.notify.warning(message);
+      if (key && GONE_KEYS.has(key)) endSession({ keepUnsaved: true, note: key === "transfer.linkLost" ? t("transfer.peerGone") : message });
     }
+  }
+
+  /**
+   * Back to the start screen: timeline, room code and peer are cleared. With keepUnsaved, files not
+   * saved yet stay (with their batch, so they can still be saved) and the note says what happened.
+   */
+  function endSession(options: { keepUnsaved: boolean; note: string }) {
+    attempt += 1;
+    const link = linkRef.current;
+    link.finished = false;
+    link.quiet = false;
+    link.opened = false;
+    link.control = "ready";
+    link.activeId = null;
+    revokeAll();
+    set((state) => {
+      const unsaved = options.keepUnsaved ? state.saves.filter((file) => !state.savedIds.has(file.id)) : [];
+      const held = new Set(unsaved.map((file) => file.id));
+      const entries = state.entries.filter((entry) => entry.kind === "batch" && entry.files.some((file) => held.has(file.id)));
+      const note = unsaved.length > 0 && options.note ? `${options.note} ${t("transfer.keptUnsaved", { count: unsaved.length })}` : options.note;
+      return {
+        phase: "idle",
+        note,
+        noteKey: null,
+        entries,
+        code: "",
+        peerName: "",
+        texts: [],
+        saves: unsaved,
+        savedIds: new Set(),
+      };
+    });
   }
 
   function show(next: TransferPhase, message = "") {
@@ -374,6 +413,11 @@ export function createLanSession(deps: LanDeps) {
     const link = linkRef.current;
     if (!link.alive || link.finished) return;
     if (typeof data === "string") {
+      if (data === BYE) {
+        api.clearRecovery();
+        fail(t("transfer.peerLeft"));
+        return;
+      }
       const control = decodeControl(data);
       if (!control) {
         fail(data.includes("manifest") ? t("transfer.tooBig") : t("transfer.failed"));
@@ -535,7 +579,8 @@ export function createLanSession(deps: LanDeps) {
     if (message.type === "peer-left" || message.type === "rejected") {
       if (link.finished || link.quiet) return;
       if (message.type === "peer-left") api.clearRecovery();
-      fail(message.type === "peer-left" ? t("transfer.peerLeft") : t("transfer.failed"));
+      if (message.type === "peer-left") fail(message.reason === "gone" ? t("transfer.peerGone") : t("transfer.peerLeft"));
+      else fail(t("transfer.failed"));
     }
   }
 
@@ -647,10 +692,30 @@ export function createLanSession(deps: LanDeps) {
     api.openSocket("guest", roomCode, body.guestToken);
   }
 
-  /** 断开: end the room for both sides. */
+  /**
+   * 断开: tell the peer (data channel, then the room via cancel), end the room and go back to the
+   * start screen. Unsaved received files are dropped, so the panel asks first (unsavedCount).
+   */
   function disconnect() {
     attempt += 1;
+    sendBye();
     fail(t("transfer.youLeft"));
+    endSession({ keepUnsaved: false, note: "" });
+  }
+
+  function sendBye() {
+    const channel = linkRef.current.channel;
+    if (!channel || channel.readyState !== "open") return;
+    try {
+      channel.send(BYE);
+    } catch {
+      // Closing anyway; the room's cancel still reaches the peer.
+    }
+  }
+
+  function unsavedCount(): number {
+    const state = get();
+    return state.saves.filter((file) => !state.savedIds.has(file.id)).length;
   }
 
   /** 重试 after a failure: back to the start screen, with a clean timeline head. */
@@ -687,6 +752,9 @@ export function createLanSession(deps: LanDeps) {
   /** The tab is going away (or into the back/forward cache): close the room and the link. */
   function pageHide() {
     attempt += 1;
+    // Closing the tab is a deliberate leave: say bye so the peer clears at once instead of waiting 10 minutes.
+    sendBye();
+    api.fail(t("transfer.youLeft"));
     api.dispose();
     revokeAll();
   }
@@ -725,5 +793,6 @@ export function createLanSession(deps: LanDeps) {
     pageShow,
     visible,
     idleNote,
+    unsavedCount,
   };
 }

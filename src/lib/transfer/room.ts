@@ -81,13 +81,15 @@ export function lease(room: RoomRecord, now: number): RoomRecord {
   return { ...room, expiresAt: Math.min(now + ROOM_TTL_MS, room.hardEndAt) };
 }
 
+/** Room lifetime past the reconnect window, so the alarm can still announce the peer as gone. */
+const ABSENT_MARGIN_MS = 60_000;
+
 export function markAbsent(room: RoomRecord, role: RoomRole, now: number): RoomRecord {
-  if (role === "host") {
-    if (room.absentHostSince != null) return room;
-    return { ...room, absentHostSince: now };
-  }
-  if (room.absentGuestSince != null) return room;
-  return { ...room, absentGuestSince: now };
+  if (role === "host" ? room.absentHostSince != null : room.absentGuestSince != null) return room;
+  // A paired room must outlive the reconnect window, or idle expiry would end it before the peer can return.
+  const expiresAt =
+    room.pairedAt != null && room.hardEndAt != null ? Math.min(Math.max(room.expiresAt, now + RECONNECT_GRACE_MS + ABSENT_MARGIN_MS), room.hardEndAt) : room.expiresAt;
+  return role === "host" ? { ...room, expiresAt, absentHostSince: now } : { ...room, expiresAt, absentGuestSince: now };
 }
 
 export function markPresent(room: RoomRecord, role: RoomRole): RoomRecord {

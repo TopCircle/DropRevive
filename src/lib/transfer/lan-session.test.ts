@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createLanSession, type LanDeps } from "./lan-session.ts";
+import { BYE, createLanSession, type LanDeps } from "./lan-session.ts";
 import type { LanHooks, LanLink, TransferLink } from "./link.ts";
 import { encodeChunk } from "./protocol.ts";
 
@@ -96,9 +96,9 @@ test("closing the panel keeps the session; only 断开 and pagehide end it", () 
   assert.deepEqual(h.calls, []);
   h.session.disconnect();
   assert.deepEqual(h.calls, ["fail:transfer.youLeft"]);
-  assert.equal(h.session.store.getState().phase, "failed");
+  assert.equal(h.session.store.getState().phase, "idle");
   h.session.pageHide();
-  assert.deepEqual(h.calls, ["fail:transfer.youLeft", "dispose"]);
+  assert.deepEqual(h.calls.slice(-2), ["fail:transfer.youLeft", "dispose"]);
 });
 
 test("a failure notice is cleared by 重试, a new room and a later connection", async () => {
@@ -170,9 +170,9 @@ test("thumbnails are revoked when the session ends; unsaved files stay saveable"
   h.peerOffers([{ id: PEER_FILE, name: "p.png", size: 2, mime: "image/png" }]);
   h.session.accept();
   h.chunk(PEER_FILE, new Uint8Array([9, 9]));
-  h.hooks().onServer({ type: "peer-left" });
+  h.hooks().onServer({ type: "peer-left", reason: "bye" });
   const state = h.session.store.getState();
-  assert.equal(state.phase, "failed");
+  assert.equal(state.phase, "idle");
   assert.deepEqual(state.previews, {});
   assert.deepEqual(h.revoked, ["blob:1"]);
   assert.equal(state.saves.length, 1);
@@ -182,4 +182,74 @@ test("visibility back to visible nudges the link", () => {
   const h = harness();
   h.session.visible();
   assert.deepEqual(h.calls, ["nudge"]);
+});
+
+function receiveUnsaved(h: ReturnType<typeof harness>) {
+  h.connect();
+  h.peerOffers([{ id: PEER_FILE, name: "a.bin", size: 2, mime: "application/octet-stream" }]);
+  h.session.accept();
+  h.chunk(PEER_FILE, new Uint8Array([4, 5]));
+}
+
+test("local 断开 says bye and clears the session back to the start", async () => {
+  const h = harness();
+  await h.session.createRoom();
+  receiveUnsaved(h);
+  assert.equal(h.session.unsavedCount(), 1);
+  h.session.disconnect();
+  const state = h.session.store.getState();
+  assert.ok(h.sent.includes(BYE));
+  assert.equal(state.phase, "idle");
+  assert.deepEqual(state.entries, []);
+  assert.equal(state.code, "");
+  assert.equal(state.peerName, "");
+  assert.equal(state.saves.length, 0);
+  assert.equal(state.note, "");
+});
+
+test("a peer's bye clears the session but keeps unsaved files with a notice", () => {
+  const h = harness();
+  receiveUnsaved(h);
+  h.hooks().onData(BYE);
+  const state = h.session.store.getState();
+  assert.equal(state.phase, "idle");
+  assert.equal(state.saves.length, 1);
+  assert.equal(state.entries.length, 1, "only the batch holding the unsaved file stays");
+  assert.match(state.note, /transfer\.peerLeft/);
+  assert.match(state.note, /transfer\.keptUnsaved/);
+});
+
+test("a blip (no bye) shows reconnecting and keeps the session on recovery", async () => {
+  const h = harness();
+  await h.session.createRoom();
+  receiveUnsaved(h);
+  const before = h.session.store.getState().entries.length;
+  h.hooks().note("transfer.reconnecting");
+  assert.equal(h.session.store.getState().note, "transfer.reconnecting");
+  h.hooks().say("connected", "transfer.connected");
+  const state = h.session.store.getState();
+  assert.equal(state.phase, "connected");
+  assert.equal(state.code, "QWERTYUP");
+  assert.equal(state.saves.length, 1);
+  assert.ok(state.entries.length >= before);
+  assert.ok(!state.entries.some((entry) => entry.kind === "notice" && entry.tone === "reconnect"));
+});
+
+test("giving up after the reconnect window clears the session, keeps unsaved files", () => {
+  const h = harness();
+  receiveUnsaved(h);
+  h.hooks().say("failed", "transfer.linkLost");
+  const state = h.session.store.getState();
+  assert.equal(state.phase, "idle");
+  assert.equal(state.saves.length, 1);
+  assert.match(state.note, /transfer\.peerGone/);
+});
+
+test("the server's gone notice (peer never came back) also clears", () => {
+  const h = harness();
+  h.connect();
+  h.hooks().onServer({ type: "peer-left", reason: "gone" });
+  const state = h.session.store.getState();
+  assert.equal(state.phase, "idle");
+  assert.equal(state.note, "transfer.peerGone");
 });

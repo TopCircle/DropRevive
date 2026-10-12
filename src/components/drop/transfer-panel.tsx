@@ -350,6 +350,8 @@ export function TransferPanel({
   }
 
   function userCancel() {
+    const unsaved = session.unsavedCount();
+    if (unsaved > 0 && !window.confirm(t("transfer.disconnectUnsaved", { count: unsaved }))) return;
     setScanning(false);
     session.disconnect();
   }
