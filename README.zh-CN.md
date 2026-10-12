@@ -134,3 +134,5 @@ npm run deploy:self     # 构建并部署你自己的副本；拒绝维护者的
 npm run deploy:production # 只更新 https://drop.habor.dpdns.org
 STAGING_WORKER=<名字> npm run deploy:staging  # 维护者用：部署到 workers.dev 上的测试 Worker；没设 STAGING_WORKER 会拒绝
 ```
+
+用了 Secrets Store？每个 `deploy*` 脚本都会重新构建，所以先在同一个终端里 export `DROP_SECRETS_STORE_ID`（Worker 用自己的 Cookie 密钥时再加 `DROP_COOKIE_KEY_SECRET_NAME`）。没设的话，部署出去就没有 Store 绑定。
