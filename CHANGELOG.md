@@ -8,7 +8,7 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 
 ## [1.0.0] - 2026-10-13
 
-首个正式版本，即线上 `261e0cc` 的代码。 / First release; the code production runs at `261e0cc`.
+首个正式版本，即线上 `bc589f5` 的代码（v1.0.0 标签）。 / First release; the code production runs at `bc589f5` (tag v1.0.0).
 
 ### 中文
 - **网盘收件箱**：文字和文件存进你自己 Google Drive / OneDrive 的 `DropRevive` 文件夹，浏览器直连网盘，服务器不保存文件；后台同步、「立即同步」、已同步内容可离线查看。
