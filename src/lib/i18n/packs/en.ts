@@ -168,7 +168,7 @@ export const en: LanguagePack = {
     "transfer.again": "Start again",
     "transfer.send": "Send",
     "transfer.done": "Finished. The connection stays open.",
-    "transfer.failed": "The two devices could not connect directly. The network may be blocking it. You can use the cloud inbox instead.",
+    "transfer.failed": "The two devices could not connect directly. Some networks (carrier-grade NAT, corporate or guest Wi-Fi) block direct links. Try the same Wi-Fi, or use the cloud inbox instead.",
     "transfer.useCloud": "Use the cloud inbox",
     "transfer.foreground": "You can switch pages; closing the tab disconnects.",
     "transfer.expired": "This room has expired.",

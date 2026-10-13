@@ -60,7 +60,7 @@ Key points:
 - File and text bytes flow in only two places: between the browser and the user's own drive (cloud drop), or between two devices (LAN transfer). The Worker does not proxy drive calls and does not forward transfer payloads.
 - The Worker does three things: serve pages; exchange tokens with Google / Microsoft for the browser (the client-secret step); and LAN pairing / signaling.
 - There is no database. Sign-in state is an encrypted cookie in the browser. Durable Objects hold only transfer rooms (code, both sides' random tokens and device names; expire after 10 minutes unpaired, session max 2 hours) and one-minute rate-limit counters.
-- LAN `RTCPeerConnection` uses `iceServers: []` — no STUN, no TURN — so peers must be able to reach each other directly (same LAN). Guest Wi-Fi isolation, VPN, and cellular fail; the UI steers users to cloud drop.
+- The direct-transfer `RTCPeerConnection` uses public STUN only (`src/lib/transfer/ice.ts`: Cloudflare and Google), no TURN. STUN lets peers on different networks often connect directly and sees only public IPs, never file content; nothing is relayed. Carrier-grade NAT, corporate/guest Wi-Fi isolation and some VPNs still fail; the UI suggests the same Wi-Fi or cloud drop.
 - `npm run dev` (Vite) has no Durable Objects; `/api/transfer` returns 404. Try LAN transfer only on a deployed Worker (with `ALLOWED_ORIGINS` unset it works on the Worker's own origin; when set, it must list that origin).
 
 ## 2. Sign-in and refresh

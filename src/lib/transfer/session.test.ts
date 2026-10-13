@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ICE_SERVERS } from "./ice.ts";
 import { connectSession, exposePeer, type DataChannelLike, type PeerLike } from "./session.ts";
 
 test("event handler setters run against the native peer", () => {
@@ -23,7 +24,7 @@ test("event handler setters run against the native peer", () => {
   assert.equal(stored, handler);
 });
 
-test("host sends an offer and applies the guest answer without ice servers", async () => {
+test("host sends an offer and applies the guest answer with public STUN only (no TURN)", async () => {
   const sent: unknown[] = [];
   let remote: unknown = null;
   const peer: PeerLike = {
@@ -56,7 +57,9 @@ test("host sends an offer and applies the guest answer without ice servers", asy
     sendSignal: (payload) => sent.push(payload),
   });
   await session.acceptSignal({ kind: "answer", sdp: "answer-sdp", gen: 1 });
-  assert.deepEqual(peer.config, { iceServers: [] });
+  assert.deepEqual(peer.config, { iceServers: ICE_SERVERS });
+  const urls = ICE_SERVERS.flatMap((s) => [s.urls].flat());
+  assert.ok(urls.length > 0 && urls.every((u) => u.startsWith("stun:")));
   assert.deepEqual(sent[0], { kind: "offer", sdp: "offer-sdp", gen: 1, fresh: true });
   assert.deepEqual(remote, { type: "answer", sdp: "answer-sdp" });
   peer.onicecandidate?.({ candidate: { toJSON: () => ({ candidate: "c", sdpMid: "0", sdpMLineIndex: 1, usernameFragment: "u" }) } });

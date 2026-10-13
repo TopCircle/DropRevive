@@ -60,7 +60,7 @@ flowchart LR
 - 文件和文字的字节只在两处流动：浏览器和用户自己的网盘之间（云端投送），或者两台设备之间（局域网直传）。Worker 不代理网盘请求，也不转发直传的字节。
 - Worker 只做三件事：发页面；替浏览器向 Google / Microsoft 换令牌（需要 client secret 的那一步）；局域网直传的配对和信令。
 - 没有数据库。登录状态是浏览器里的加密 cookie。Durable Object 只放直传房间（代码、两端的随机令牌和设备名，10 分钟没配上就过期，会话最长 2 小时）和一分钟窗口的限流计数。
-- 局域网直传的 `RTCPeerConnection` 用 `iceServers: []`，不用 STUN，也不用 TURN，所以只在两台设备能直接互通时连得上（同一个局域网）。访客网络隔离、VPN、蜂窝网会失败，界面会让用户改用云端。
+- 直传的 `RTCPeerConnection` 只用公共 STUN（`src/lib/transfer/ice.ts`：Cloudflare、Google），不用 TURN。STUN 让不同网络的设备多数情况下也能直连，它只看到公网 IP，看不到文件内容；不做任何中继。运营商大内网、公司或访客 Wi-Fi 隔离和部分 VPN 仍会失败，界面会建议连同一个 Wi-Fi 或改用云端。
 - `npm run dev`（Vite）里没有 Durable Object，`/api/transfer` 返回 404；直传只能在部署后的 Worker 上试（不设 `ALLOWED_ORIGINS` 时在 Worker 自己的地址上可用；设了的话名单里须包含该站点的 origin）。
 
 ## 2. 登录和续签

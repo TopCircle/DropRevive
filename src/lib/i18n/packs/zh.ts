@@ -162,7 +162,7 @@ export const zhMessages = {
   "transfer.again": "重新开始",
   "transfer.send": "发送",
   "transfer.done": "传完了。连接还在。",
-  "transfer.failed": "两台设备没有连上。网络可能隔离了直连。可以改用云端收件箱。",
+  "transfer.failed": "两台设备没能直连。有些网络（运营商大内网、公司或访客 Wi-Fi）不允许直连，可以试试连同一个 Wi-Fi，或改用云端收件箱。",
   "transfer.useCloud": "改用云端收件箱",
   "transfer.foreground": "可以切到别的页面，关掉标签页才会断开",
   "transfer.expired": "房间已过期。",
