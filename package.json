@@ -1,5 +1,6 @@
 {
   "name": "droprevive",
+  "version": "1.0.0",
   "private": true,
   "description": "Send text and files between your own devices through your own Google Drive or OneDrive. PWA on Cloudflare Workers.",
   "license": "MIT",
@@ -28,6 +29,7 @@
     "deploy:self": "node scripts/deploy-self.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/allowed-origins.test.ts src/lib/runtime-config.test.ts src/lib/setup-status.test.ts src/lib/drop/client-env.test.ts src/lib/pwa-manifest.test.ts src/lib/links.test.ts src/lib/i18n/rich.test.ts src/lib/drop/oauth.server.test.ts src/lib/drop/drive-session.test.ts src/lib/drop/reconcile.test.ts src/lib/drop/store.test.ts src/lib/drop/store.sync.test.ts src/lib/drop/net-retry.test.ts src/lib/drop/http.test.ts src/components/drop/use-stick-to-bottom.test.ts src/components/drop/back-layer.test.ts src/components/drop/use-long-press.test.ts src/components/drop/overlay-scrollbar-core.test.ts src/lib/drop/multi-select.test.ts src/lib/drop/search-groups.test.ts src/lib/drop/desktop-search.test.ts src/lib/drop/scroll-edges.test.ts src/lib/transfer/*.test.ts server/transfer-room.integration.test.mjs",
+    "release": "node scripts/release.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

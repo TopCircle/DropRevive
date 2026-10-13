@@ -8,4 +8,5 @@ interface ImportMeta {
 }
 
 /** Short git commit baked in by Vite. Stand-in for a release version. */
+declare const __APP_VERSION__: string;
 declare const __APP_REVISION__: string;

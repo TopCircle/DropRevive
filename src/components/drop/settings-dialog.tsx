@@ -210,7 +210,7 @@ export function SettingsDialog() {
               data-settings-divider="bottom"
               className={`pointer-events-none absolute top-0 left-0 -right-1.5 h-px bg-border transition-opacity duration-150 ${edges.state.below ? "opacity-100" : "opacity-0"}`}
             />
-            {t("settings.version", { rev: __APP_REVISION__ })}
+            {t("settings.version", { version: __APP_VERSION__, rev: __APP_REVISION__ })}
             <span aria-hidden="true"> · </span>
             <a href="/privacy" className="underline underline-offset-4 hover:text-foreground">
               {t("settings.privacy")}
