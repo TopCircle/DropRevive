@@ -72,7 +72,7 @@ npm run typecheck  # tsc --noEmit
 npm run build      # 生产构建，输出到 .output/
 ```
 
-CI（GitHub Actions）在每次 push 和 pull request 时跑 `npm ci`、类型检查、测试、lint 和构建。开 pull request 前请在本地跑一遍同样的命令。lint 保持 0 error、0 warning。写这段时 `npm test` 共跑 34 个脚本测试加 323 个单元和集成测试。
+CI（GitHub Actions）在每次 push 和 pull request 时跑 `npm ci`、类型检查、测试、lint 和构建。开 pull request 前请在本地跑一遍同样的命令。lint 保持 0 error、0 warning。写这段时 `npm test` 共跑 37 个脚本测试加 323 个单元和集成测试。
 
 ### 在手机上测试
 
