@@ -189,7 +189,7 @@ export class TransferRoom extends DurableObject<Env> {
     if (decoded.type === "cancel") {
       this.ctx.storage.sql.exec("DELETE FROM room");
       await this.ctx.storage.deleteAlarm();
-      this.closeAll({ type: "peer-left", reason: "bye" });
+      this.closeAll({ type: "peer-left", reason: decoded.reason === "direct-failed" ? "direct-failed" : "bye" });
       return;
     }
     if (decoded.type === "hello") return;

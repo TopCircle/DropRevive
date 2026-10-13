@@ -75,7 +75,7 @@ export function TransferPanel({
   onAlsoCloud?: () => void;
   onClearDraft?: () => void;
   alsoCloudLabel?: string;
-  composer: ReactElement<{ hideSend?: boolean; directSend?: { label: string; disabled?: boolean; onSend: () => void } }>;
+  composer: ReactElement<{ hideSend?: boolean; directSend?: { label: string; disabled?: boolean; hint?: string; onSend: () => void } }>;
 }) {
   const { t } = useI18n();
   // The session (room, link, timeline) belongs to the tab, not to this panel: see lan-session-store.
@@ -393,7 +393,9 @@ export function TransferPanel({
             disabled: offerBlocked(phase, noteKey),
             onSend: offerCurrent,
           }
-        : undefined,
+        : phase === "joining"
+          ? { label: t("transfer.send"), disabled: true, hint: t("transfer.establishingHint"), onSend: () => {} }
+          : undefined,
   });
 
   function linkLabel(): string {
@@ -431,7 +433,7 @@ export function TransferPanel({
       {frameClassName && (
         <div className={`${frameClassName} grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 py-1.5 ${inRoom ? "border-b border-border" : ""}`}>
           <div className="min-w-0">
-            {inRoom && (
+            {inRoom && phase !== "failed" && (
               <>
                 <p className="truncate text-sm font-medium leading-5">{peerName || t("transfer.peerPending")}</p>
                 <p className="truncate text-xs leading-4 text-muted-foreground">{t("transfer.foreground")}</p>
@@ -442,7 +444,7 @@ export function TransferPanel({
           <div className="flex items-center justify-end gap-2">{sessionActions}</div>
         </div>
       )}
-      {inRoom && !frameClassName ? (
+      {inRoom && phase !== "failed" && !frameClassName ? (
         <header className="flex items-center justify-between gap-2 border-b border-border py-1">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium leading-5">{peerName || t("transfer.peerPending")}</p>
@@ -541,9 +543,12 @@ export function TransferPanel({
           </div>
         </div>
         {phase === "joining" && (
-          <div role="status" className="mb-3 rounded-2xl border border-border px-3 py-3">
-            {peerName && <p className="truncate text-sm font-medium">{peerName}</p>}
-            <p className={`text-sm ${peerName ? "mt-1 text-muted-foreground" : ""}`}>{t("transfer.linkConnecting")}</p>
+          <div role="status" aria-live="polite" className="mb-3 flex items-start gap-3 py-3">
+            <span className="mt-1.5 size-2 shrink-0 animate-pulse rounded-full bg-muted-foreground" aria-hidden />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{t("transfer.establishing")}</p>
+              {peerName && <p className="mt-1 truncate text-xs text-muted-foreground">{t("transfer.peer", { name: peerName })}</p>}
+            </div>
           </div>
         )}
         {qr && phase === "hosting" && (

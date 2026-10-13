@@ -197,6 +197,8 @@ export const zhMessages = {
   "transfer.peerPending": "等待对方",
   "transfer.linkLive": "已连接",
   "transfer.linkConnecting": "连接中",
+  "transfer.establishing": "正在建立直连…",
+  "transfer.establishingHint": "连上后就能发送",
   "transfer.linkReconnecting": "重连中",
   "transfer.linkEnded": "已断开",
   "transfer.linkFailed": "传输失败",

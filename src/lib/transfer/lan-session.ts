@@ -579,7 +579,9 @@ export function createLanSession(deps: LanDeps) {
     if (message.type === "peer-left" || message.type === "rejected") {
       if (link.finished || link.quiet) return;
       if (message.type === "peer-left") api.clearRecovery();
-      if (message.type === "peer-left") fail(message.reason === "gone" ? t("transfer.peerGone") : t("transfer.peerLeft"));
+      if (message.type === "peer-left") {
+        fail(message.reason === "gone" ? t("transfer.peerGone") : message.reason === "direct-failed" ? t("transfer.failed") : t("transfer.peerLeft"));
+      }
       else fail(t("transfer.failed"));
     }
   }

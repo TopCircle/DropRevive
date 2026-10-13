@@ -60,7 +60,7 @@ export function Composer({
   /** Direct mode keeps the fields and does not offer a cloud send. */
   hideSend?: boolean;
   /** LAN session send. Leaves the draft in place and does not touch cloud history. */
-  directSend?: { label: string; disabled?: boolean; onSend: () => void };
+  directSend?: { label: string; disabled?: boolean; hint?: string; onSend: () => void };
 }) {
   const send = useDropStore((state) => state.send);
   const jobs = useDropStore((state) => state.jobs);
@@ -249,6 +249,7 @@ export function Composer({
                 {t("composer.again")}
               </button>
             )}
+            {directSend?.hint && <span className="truncate text-xs text-muted-foreground">{directSend.hint}</span>}
             {directSend ? (
               <Button type="submit" size={compact ? "md" : "lg"} className="w-auto" disabled={directSend.disabled}>
                 <Send className="size-4" />

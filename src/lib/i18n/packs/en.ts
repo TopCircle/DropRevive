@@ -203,6 +203,8 @@ export const en: LanguagePack = {
     "transfer.peerPending": "Waiting for the other device",
     "transfer.linkLive": "Connected",
     "transfer.linkConnecting": "Connecting",
+    "transfer.establishing": "Establishing direct connection…",
+    "transfer.establishingHint": "You can send once connected",
     "transfer.linkReconnecting": "Reconnecting",
     "transfer.linkEnded": "Disconnected",
     "transfer.linkFailed": "Transfer failed",

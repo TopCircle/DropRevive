@@ -18,6 +18,8 @@ export interface PeerLike {
   config: RTCConfiguration | null;
   onicecandidate: ((event: { candidate: { toJSON(): RTCIceCandidateInit } | null }) => void) | null;
   onconnectionstatechange: (() => void) | null;
+  oniceconnectionstatechange?: (() => void) | null;
+  iceConnectionState?: RTCIceConnectionState;
   ondatachannel: ((event: { channel: DataChannelLike }) => void) | null;
   connectionState?: RTCPeerConnectionState;
   createDataChannel(label: string): DataChannelLike;
@@ -187,6 +189,11 @@ export async function connectSession(input: {
     target.onconnectionstatechange = () => {
       if (target !== peer) return;
       input.onConnectionState?.(target.connectionState, target);
+    };
+    // ICE "failed" can arrive before the overall connection state does; report it right away.
+    target.oniceconnectionstatechange = () => {
+      if (target !== peer) return;
+      if (target.iceConnectionState === "failed" && target.connectionState !== "failed") input.onConnectionState?.("failed", target);
     };
     target.ondatachannel = (event) => {
       if (target !== peer) return;

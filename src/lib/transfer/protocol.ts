@@ -25,15 +25,16 @@ export type ClientSignal =
   | { type: "hello"; token: string; deviceName: string }
   | { type: "lease"; token: string }
   | { type: "signal"; token: string; payload: SignalPayload }
-  | { type: "cancel"; token: string };
+  /** reason "direct-failed": the first direct connection never opened, so the other side can show why. */
+  | { type: "cancel"; token: string; reason?: "direct-failed" };
 
 export type ServerSignal =
   | { type: "joined"; role: "host" | "guest"; peerName: string | null }
   | { type: "peer"; deviceName: string }
   | { type: "signal"; payload: SignalPayload }
   | { type: "rejected"; reason: "bad-token" | "full" | "expired" | "closed" | "too-large" }
-  /** bye: the other side chose to leave; gone: it did not come back within the reconnect window. */
-  | { type: "peer-left"; reason?: "bye" | "gone" }
+  /** bye: the other side chose to leave; gone: it did not come back within the reconnect window; direct-failed: the first direct connection never opened. */
+  | { type: "peer-left"; reason?: "bye" | "gone" | "direct-failed" }
   | { type: "expired"; reason: "invite" | "idle" | "hard" };
 
 const encoder = new TextEncoder();
@@ -80,9 +81,11 @@ export function decodeSignal(raw: string): ClientSignal | null {
     return null;
   }
   if (!parsed || typeof parsed !== "object") return null;
-  const message = parsed as { type?: string; token?: string; deviceName?: string; payload?: unknown };
+  const message = parsed as { type?: string; token?: string; deviceName?: string; payload?: unknown; reason?: unknown };
   if (typeof message.token !== "string" || message.token.length < 16 || message.token.length > 80) return null;
-  if (message.type === "cancel") return { type: "cancel", token: message.token };
+  if (message.type === "cancel") {
+    return message.reason === "direct-failed" ? { type: "cancel", token: message.token, reason: "direct-failed" } : { type: "cancel", token: message.token };
+  }
   if (message.type === "lease") return { type: "lease", token: message.token };
   if (message.type === "hello" && typeof message.deviceName === "string") {
     return { type: "hello", token: message.token, deviceName: message.deviceName.slice(0, 40) };

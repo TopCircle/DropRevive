@@ -172,10 +172,10 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     recovery.clear();
   }
 
-  function cancelRoom(): void {
+  function cancelRoom(reason?: "direct-failed"): void {
     const link = linkRef.current;
     if (!link.socket || link.socket.readyState !== WebSocket.OPEN) return;
-    link.socket.send(encodeSignal({ type: "cancel", token: link.token }));
+    link.socket.send(encodeSignal(reason ? { type: "cancel", token: link.token, reason } : { type: "cancel", token: link.token }));
   }
 
   function release(): void {
@@ -197,13 +197,14 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     link.alive = alive;
   }
 
-  function fail(message: string): void {
+  /** directFailed: the first direct connection never opened; tell the other side why before closing the room. */
+  function fail(message: string, directFailed = false): void {
     const link = linkRef.current;
     if (!link.alive || link.finished || link.quiet) return;
     link.finished = true;
     link.quiet = true;
     clearTimers();
-    cancelRoom();
+    cancelRoom(directFailed && !link.opened ? "direct-failed" : undefined);
     release();
     link.finished = true;
     link.quiet = true;
@@ -341,7 +342,7 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     });
     if (decision.action === "ignore") return;
     if (decision.action === "fail-initial") {
-      fail(text("transfer.failed"));
+      fail(text("transfer.failed"), true);
       return;
     }
     if (decision.action === "give-up") {
@@ -410,7 +411,7 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
       channel.onopen = open;
       if (!link.opened && !link.openTimer) {
         link.openTimer = window.setTimeout(() => {
-          if (!linkRef.current.opened) fail(text("transfer.failed"));
+          if (!linkRef.current.opened) fail(text("transfer.failed"), true);
         }, CONNECT_TIMEOUT_MS);
       }
     }
@@ -476,7 +477,7 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
         for (const payload of queued) deliver(session, payload);
         void session.waitChannel().catch(() => {
           const current = linkRef.current;
-          if (!current.opened && current.alive && !current.finished && !current.quiet && current.token === token) fail(text("transfer.failed"));
+          if (!current.opened && current.alive && !current.finished && !current.quiet && current.token === token) fail(text("transfer.failed"), true);
         });
         if (!resend) {
           resend = window.setInterval(() => {
@@ -491,7 +492,7 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
       })
       .catch(() => {
         const live = linkRef.current;
-        if (live.alive && !live.finished && !live.quiet && live.token === token) fail(text("transfer.failed"));
+        if (live.alive && !live.finished && !live.quiet && live.token === token) fail(text("transfer.failed"), true);
         return closedSession();
       });
   }

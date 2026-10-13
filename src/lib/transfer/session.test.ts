@@ -460,3 +460,45 @@ test("a host offer waits for an open socket and a guest candidate does not wait 
   guest.onicecandidate?.({ candidate: { toJSON: () => ({ candidate: "g", sdpMid: "0", sdpMLineIndex: 0 }) } });
   assert.deepEqual(sent, [{ kind: "candidate", init: { candidate: "g", sdpMid: "0", sdpMLineIndex: 0 }, gen: 1 }]);
 });
+
+test("ICE failure is reported as a failed connection right away", async () => {
+  const states: (string | undefined)[] = [];
+  const peer: PeerLike = {
+    config: null,
+    onicecandidate: null,
+    onconnectionstatechange: null,
+    ondatachannel: null,
+    connectionState: "connecting",
+    iceConnectionState: "checking",
+    createDataChannel() {
+      return {
+        readyState: "connecting",
+        send() {},
+        close() {},
+        binaryType: "arraybuffer",
+        onopen: null,
+        onmessage: null,
+        onclose: null,
+      };
+    },
+    async createOffer() {
+      return { type: "offer", sdp: "offer-sdp" };
+    },
+    async createAnswer() {
+      return { type: "answer", sdp: "answer-sdp" };
+    },
+    async setLocalDescription() {},
+    async setRemoteDescription() {},
+    async addIceCandidate() {},
+    close() {},
+  };
+  await connectSession({
+    role: "host",
+    createPeer: () => peer,
+    sendSignal: () => undefined,
+    onConnectionState: (state) => states.push(state),
+  });
+  peer.iceConnectionState = "failed";
+  peer.oniceconnectionstatechange?.();
+  assert.deepEqual(states, ["failed"]);
+});

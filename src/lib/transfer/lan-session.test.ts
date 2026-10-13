@@ -253,3 +253,11 @@ test("the server's gone notice (peer never came back) also clears", () => {
   assert.equal(state.phase, "idle");
   assert.equal(state.note, "transfer.peerGone");
 });
+
+test("a direct-failed notice from the other side shows the failure message, not 'peer left'", () => {
+  const h = harness();
+  h.hooks().onServer({ type: "peer-left", reason: "direct-failed" });
+  const state = h.session.store.getState();
+  assert.equal(state.phase, "failed");
+  assert.equal(state.note, "transfer.failed");
+});
