@@ -6,9 +6,14 @@ import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
 import { PROFILE_VAR, profileFrom, profileOverrides } from "./scripts/wrangler-profile.mjs";
 
+import pkg from "./package.json" with { type: "json" };
+
+/** Short commit of the build, with -dirty when tracked files have uncommitted changes. */
 function appRevision(): string {
   try {
-    return execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+    const rev = execSync("git rev-parse --short HEAD", { encoding: "utf8" }).trim();
+    const dirty = execSync("git status --porcelain --untracked-files=no", { encoding: "utf8" }).trim();
+    return dirty ? `${rev}-dirty` : rev;
   } catch {
     return "dev";
   }
@@ -16,6 +21,7 @@ function appRevision(): string {
 
 export default defineConfig(({ command, isPreview }) => ({
   define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
     __APP_REVISION__: JSON.stringify(appRevision()),
   },
   server: {

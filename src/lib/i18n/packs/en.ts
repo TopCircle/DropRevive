@@ -100,7 +100,7 @@ export const en: LanguagePack = {
     "settings.cacheHint": "Clearing the cache does not delete files in the drive. After you install the app, synced drops stay readable offline.",
     "settings.clearCache": "Clear local cache",
     "settings.cacheCleared": "Local cache cleared. The next sync will fetch again.",
-    "settings.version": "Version {rev}",
+    "settings.version": "Version v{version} ({rev})",
     "settings.privacy": "Privacy",
     "settings.consent": "By connecting a drive, you agree to the ",
     "settings.consentLink": "privacy notice",

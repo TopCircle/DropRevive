@@ -22,7 +22,7 @@ npm run typecheck  # tsc --noEmit
 npm run build      # production build into .output/
 ```
 
-CI (GitHub Actions) runs `npm ci`, typecheck, test, lint and build on every push and pull request. Run the same commands locally before you open a pull request. Lint is kept at 0 errors and 0 warnings. At the time of writing `npm test` runs 34 script tests plus 323 unit and integration tests.
+CI (GitHub Actions) runs `npm ci`, typecheck, test, lint and build on every push and pull request. Run the same commands locally before you open a pull request. Lint is kept at 0 errors and 0 warnings. At the time of writing `npm test` runs 37 script tests plus 323 unit and integration tests.
 
 ### Testing on a phone
 
@@ -34,6 +34,17 @@ Camera and focus behaviour cannot be checked in a desktop browser, so try LAN pa
 2. Keep each change focused, with tests where behavior changes.
 3. Open a pull request against `main`. CI must pass before merge.
 4. Only maintainers deploy the production site with `npm run deploy:production`. Anyone can self-host with the Deploy to Cloudflare button or `npm run deploy:self`; see [`docs/self-host.md`](docs/self-host.md).
+
+### Releases (maintainers)
+
+The version lives in `package.json` (semver). Settings shows it with the build's short commit, e.g. `Version v1.0.0 (abc1234)`; a build with uncommitted changes shows `-dirty`, so build releases from a clean tree.
+
+- **major**: a self-hoster has to act (new or renamed secret/binding, a Durable Object migration) or a stored-data / protocol break.
+- **minor**: a new user-visible feature. **patch**: fixes, dependency bumps, copy. Docs-only changes need no release.
+
+1. Add notes under `## [Unreleased]` in `CHANGELOG.md` as changes land.
+2. On a clean, up-to-date `main`: `npm run release -- patch` (or `minor` / `major`). It bumps `package.json` and the lockfile, dates the changelog section, commits and creates an annotated `vX.Y.Z` tag, locally only. It never pushes or deploys.
+3. Then, with approval: `git push origin main vX.Y.Z`, deploy production, move the `production` tag, and `gh release create vX.Y.Z` with the changelog section as notes.
 
 ### Secrets
 
@@ -61,7 +72,7 @@ npm run typecheck  # tsc --noEmit
 npm run build      # 生产构建，输出到 .output/
 ```
 
-CI（GitHub Actions）在每次 push 和 pull request 时跑 `npm ci`、类型检查、测试、lint 和构建。开 pull request 前请在本地跑一遍同样的命令。lint 保持 0 error、0 warning。写这段时 `npm test` 共跑 34 个脚本测试加 323 个单元和集成测试。
+CI（GitHub Actions）在每次 push 和 pull request 时跑 `npm ci`、类型检查、测试、lint 和构建。开 pull request 前请在本地跑一遍同样的命令。lint 保持 0 error、0 warning。写这段时 `npm test` 共跑 37 个脚本测试加 323 个单元和集成测试。
 
 ### 在手机上测试
 
@@ -73,6 +84,17 @@ CI（GitHub Actions）在每次 push 和 pull request 时跑 `npm ci`、类型�
 2. 每个改动保持聚焦；行为有变化就补测试。
 3. 向 `main` 开 pull request。CI 通过后才能合并。
 4. 只有维护者能用 `npm run deploy:production` 更新正式站。其他人可以用「Deploy to Cloudflare」按钮或 `npm run deploy:self` 自行部署，见 [`docs/self-host.zh-CN.md`](docs/self-host.zh-CN.md)。
+
+### 发布（维护者）
+
+版本号写在 `package.json`（语义化版本）。设置页会连同构建时的短提交号一起显示，例如 `版本 v1.0.0 (abc1234)`；有未提交改动时会带 `-dirty`，所以请在干净的工作区构建正式版本。
+
+- **major**：自建用户需要操作（新增或改名的密钥/绑定、Durable Object 迁移），或存储数据/协议不兼容。
+- **minor**：用户能看到的新功能。**patch**：修复、依赖升级、文案。只改文档不需要发布。
+
+1. 改动合入时在 `CHANGELOG.md` 的 `## [Unreleased]` 下写说明。
+2. 在干净且最新的 `main` 上运行 `npm run release -- patch`（或 `minor` / `major`）。它会更新 `package.json` 和 lockfile、给更新日志加日期、提交并创建带注释的 `vX.Y.Z` 标签，全部只在本地，不会推送或部署。
+3. 之后经确认再：`git push origin main vX.Y.Z`、部署正式站、移动 `production` 标签，并用该版本的更新日志运行 `gh release create vX.Y.Z`。
 
 ### 密钥
 

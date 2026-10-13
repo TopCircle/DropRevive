@@ -94,7 +94,7 @@ export const zhMessages = {
   "settings.cacheHint": "清除缓存不会删除云盘文件。装到主屏幕后，断网仍可查看已经同步过的记录。",
   "settings.clearCache": "清除本机缓存",
   "settings.cacheCleared": "本机缓存已清，下次同步会重新拉取",
-  "settings.version": "版本 {rev}",
+  "settings.version": "版本 v{version} ({rev})",
   "settings.privacy": "隐私说明",
   "settings.consent": "连接网盘即表示同意",
   "settings.consentLink": "《隐私说明》",
