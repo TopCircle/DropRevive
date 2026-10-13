@@ -226,13 +226,13 @@ The session is owned by the tab, not by the panel. `src/lib/transfer/lan-session
 
 | Event | What happens |
 | --- | --- |
-| 断开 | Confirm first if received files are unsaved. Send `{"t":"bye"}` on the data channel, then `cancel` to the room; the server closes both sockets with `peer-left` (`reason: "bye"`). Back to the start screen; everything is cleared |
+| **Disconnect** | Confirm first if received files are unsaved. Send `{"t":"bye"}` on the data channel, then `cancel` to the room; the server closes both sockets with `peer-left` (`reason: "bye"`). Back to the start screen; everything is cleared |
 | Tab closed (`pagehide`) | Same bye + cancel, then the link is disposed. `beforeunload` asks only while sending/receiving or holding unsaved files |
 | Peer bye (data channel or `peer-left` `bye`) | Session cleared; unsaved files stay with their batch, plus a notice |
-| Drop without bye | 重连中; recovery as before (ICE restart, socket reconnect with 1 s → 30 s backoff). On `visibilitychange` to visible, `link.nudge()` reports a dropped socket/channel/peer so recovery starts at once |
+| Drop without bye | **Reconnecting**; recovery as before (ICE restart, socket reconnect with 1 s → 30 s backoff). On `visibilitychange` to visible, `link.nudge()` reports a dropped socket/channel/peer so recovery starts at once |
 | No recovery within `RECONNECT_GRACE_MS` (10 min) | The client gives up, or the server alarm sends `peer-left` (`reason: "gone"`) to the side still connected. Session cleared, unsaved files kept, notice |
 | Server idle / hard expiry | As before (`ROOM_TTL_MS` 10 min idle, `MAX_SESSION_MS` 2 h). When a paired side drops, `markAbsent` pushes the room's expiry to at least the reconnect window plus 1 min (capped by the hard limit), so idle expiry cannot end the room first |
 
-Memory: received files are held as bytes in the store until saved or removed (移除); thumbnails (Blob URLs) are revoked on save, on remove and when the session ends; a warning fires once when unsaved bytes cross 128 MiB (`UNSAVED_WARN_BYTES`); the timeline keeps at most 200 entries (`MAX_TIMELINE`), never dropping open batches or ones with unsaved files.
+Memory: received files are held as bytes in the store until saved or removed (**Remove**); thumbnails (Blob URLs) are revoked on save, on remove and when the session ends; a warning fires once when unsaved bytes cross 128 MiB (`UNSAVED_WARN_BYTES`); the timeline keeps at most 200 entries (`MAX_TIMELINE`), never dropping open batches or ones with unsaved files.
 
 Limit: mobile browsers may freeze a background tab and drop its WebRTC link. Within the reconnect window it recovers when the tab is visible again; the OS can also kill the tab, which ends the session without a bye (the peer then waits out the window).

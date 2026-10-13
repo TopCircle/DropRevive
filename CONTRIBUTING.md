@@ -22,7 +22,7 @@ npm run typecheck  # tsc --noEmit
 npm run build      # production build into .output/
 ```
 
-CI (GitHub Actions) runs `npm ci`, typecheck, test, lint and build on every push and pull request. Run the same commands locally before you open a pull request. Lint is kept at 0 errors and 0 warnings. At the time of writing `npm test` runs 10 script tests plus 264 unit and integration tests.
+CI (GitHub Actions) runs `npm ci`, typecheck, test, lint and build on every push and pull request. Run the same commands locally before you open a pull request. Lint is kept at 0 errors (14 known `react-refresh/only-export-components` warnings in `src/routes/*`, from eslint-plugin-react-refresh 0.5). At the time of writing `npm test` runs 34 script tests plus 323 unit and integration tests.
 
 ### Testing on a phone
 
@@ -61,7 +61,7 @@ npm run typecheck  # tsc --noEmit
 npm run build      # 生产构建，输出到 .output/
 ```
 
-CI（GitHub Actions）在每次 push 和 pull request 时跑 `npm ci`、类型检查、测试、lint 和构建。开 pull request 前请在本地跑一遍同样的命令。lint 保持 0 error、0 warning。写这段时 `npm test` 共跑 10 个脚本测试加 264 个单元和集成测试。
+CI（GitHub Actions）在每次 push 和 pull request 时跑 `npm ci`、类型检查、测试、lint 和构建。开 pull request 前请在本地跑一遍同样的命令。lint 保持 0 error（`src/routes/*` 里有 14 个已知的 `react-refresh/only-export-components` warning，来自 eslint-plugin-react-refresh 0.5）。写这段时 `npm test` 共跑 34 个脚本测试加 323 个单元和集成测试。
 
 ### 在手机上测试
 
