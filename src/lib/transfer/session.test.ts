@@ -60,6 +60,7 @@ test("host sends an offer and applies the guest answer with public STUN only (no
   assert.deepEqual(peer.config, { iceServers: ICE_SERVERS });
   const urls = ICE_SERVERS.flatMap((s) => [s.urls].flat());
   assert.ok(urls.length > 0 && urls.every((u) => u.startsWith("stun:")));
+  assert.deepEqual(urls, ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302", "stun:stun.chat.bilibili.com:3478", "stun:stun.hitv.com:3478"]);
   assert.deepEqual(sent[0], { kind: "offer", sdp: "offer-sdp", gen: 1, fresh: true });
   assert.deepEqual(remote, { type: "answer", sdp: "answer-sdp" });
   peer.onicecandidate?.({ candidate: { toJSON: () => ({ candidate: "c", sdpMid: "0", sdpMLineIndex: 1, usernameFragment: "u" }) } });

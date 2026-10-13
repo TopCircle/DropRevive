@@ -7,11 +7,11 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 ## [Unreleased]
 
 ### 中文
-- **直传支持公共 STUN**（Cloudflare、Google），不同网络下多数情况也能点对点直连；STUN 只看到公网 IP，看不到文件内容；仍然没有 TURN、没有中继。
+- **直传支持公共 STUN**（Cloudflare、Google，以及国内的 bilibili、hitv），不同网络下多数情况也能点对点直连；STUN 只看到公网 IP，看不到文件内容；仍然没有 TURN、没有中继。
 - 连不上时的提示说明了原因（运营商大内网、公司或访客 Wi-Fi），并建议连同一个 Wi-Fi。
 
 ### English
-- **Direct transfer uses public STUN** (Cloudflare, Google), so peers on different networks can usually connect P2P; STUN sees only public IPs, never file content; still no TURN and no relay.
+- **Direct transfer uses public STUN** (Cloudflare, Google, plus bilibili and hitv for mainland China), so peers on different networks can usually connect P2P; STUN sees only public IPs, never file content; still no TURN and no relay.
 - The connection-failed message now explains why (carrier-grade NAT, corporate or guest Wi-Fi) and suggests the same Wi-Fi.
 
 ## [1.0.0] - 2026-10-13
