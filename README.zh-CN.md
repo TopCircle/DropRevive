@@ -118,7 +118,7 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 
 - [参与开发](CONTRIBUTING.md) · [架构说明](docs/architecture.zh-CN.md)（[English](docs/architecture.md)）· [安全策略](SECURITY.md)
 - GitHub Actions 会在 push 和 pull request 时运行类型检查、测试、lint 和构建；CI 不使用部署密钥。
-- `npm test` 先跑脚本测试，再跑单元和集成测试：传送协议和局域网房间、扫码辅助逻辑、网盘登录经纪、跨标签页续签，以及网盘 store（同步、删除、令牌过期）。写这段时共有 34 个脚本测试加 323 个其他测试；lint 保持 0 error、0 warning。
+- `npm test` 先跑脚本测试，再跑单元和集成测试：传送协议和局域网房间、扫码辅助逻辑、网盘登录经纪、跨标签页续签，以及网盘 store（同步、删除、令牌过期）。写这段时共有 34 个脚本测试加 323 个其他测试；lint 保持 0 error（`src/routes/*` 里有 14 个已知的 `react-refresh/only-export-components` warning，来自 eslint-plugin-react-refresh 0.5）。
 - 交流和提问：项目的 Telegram 群组 <https://t.me/droprevive>。安全问题请私下报告，见 [SECURITY.md](SECURITY.md)。
 - `wrangler.jsonc` 是公开配置。正式站是 `scripts/wrangler-profile.mjs` 里的一个构建配置；`npm test` 会检查公开、正式、测试站三套配置生成得对不对。
 
