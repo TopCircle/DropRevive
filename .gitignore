@@ -7,3 +7,5 @@ node_modules/
 !.dev.vars.example
 .output/
 .wrangler/
+# Private maintainer notes and backups; never committed.
+_local/

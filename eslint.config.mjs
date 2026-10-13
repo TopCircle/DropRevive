@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-/** Flat ESLint config for the TanStack Start app-builder template. */
+/** Flat ESLint config for DropRevive (TanStack Start on Cloudflare Workers). */
 export default tseslint.config(
   {
     ignores: [
@@ -41,6 +41,11 @@ export default tseslint.config(
       ],
       "@typescript-eslint/no-explicit-any": "off",
     },
+  },
+  {
+    // TanStack route files export the route object next to their components by design.
+    files: ["src/routes/**/*.{ts,tsx}"],
+    rules: { "react-refresh/only-export-components": "off" },
   },
   // Disable rules that conflict with Prettier formatting.
   prettier,
