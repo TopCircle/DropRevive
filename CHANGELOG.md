@@ -6,6 +6,8 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-14
+
 ### 中文
 - **「局域网直传」改名为「点对点直传」**：不同网络下也能直连，同一个 Wi-Fi 下最稳；网址和内部名称不变。
 - **直传支持公共 STUN**（Cloudflare、Google，以及国内的 bilibili、hitv），不同网络下多数情况也能点对点直连；STUN 只看到公网 IP，看不到文件内容；仍然没有 TURN、没有中继。
