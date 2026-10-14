@@ -4,7 +4,7 @@
 
 Send text and files between your own devices. Sign in with your Google Drive or OneDrive; content lives in that drive's `DropRevive` folder. The browser talks to the drive directly. This project's servers only serve the web app — they do not store your files and do not mint share links for other people.
 
-When the other side opens later, sign in with the same drive account and sync to see the same cloud items. When both devices are with you, use temporary LAN transfer so files never go through the drive. There are no multi-user rooms and no anonymous share links.
+When the other side opens later, sign in with the same drive account and sync to see the same cloud items. When both devices are with you, use temporary P2P Transfer so files never go through the drive. There are no multi-user rooms and no anonymous share links.
 
 DropRevive is an independent project for the kind of need Edge Drop used to cover. It is not affiliated with Microsoft Edge, Microsoft, or Google.
 
@@ -18,13 +18,13 @@ License: [MIT](LICENSE)
 2. Write text or add files; they go to the `DropRevive` folder on your drive. Sidebar folders are subfolders of that directory.
 3. On another device, open the same drive account and wait for sync.
 
-When both devices are nearby and both have DropRevive open, use temporary LAN transfer. Pair with a QR code or an 8-character code. Files go straight to the other device — not into the `DropRevive` drive folder. If the other side opens later, use the cloud inbox instead.
+When both devices have DropRevive open, use temporary direct transfer (works best on the same Wi-Fi). Pair with a QR code or an 8-character code. Files go straight to the other device — not into the `DropRevive` drive folder. If the other side opens later, use the cloud inbox instead.
 
 **Scanning the QR code with a phone.** The in-page scanner uses the browser's `BarcodeDetector` when it exists and falls back to a bundled jsQR decoder (loaded on demand) when it is missing, throws, or stays silent for a few seconds. `BarcodeDetector` can be present yet useless, for example in Android browsers without Google services, which is why the fallback does not depend on it being absent. The camera asks for 1280x720 at 30 fps, switches on continuous autofocus where the browser supports it, offers a torch button when the camera has one, and tap-to-focus where supported. The viewfinder fills the panel width. Problems (permission denied, no camera, a QR from another site, nothing read after 10 seconds) show as short toasts, never as text over the picture. You can always type the 8-character code instead. To see what the scanner is doing on a device, open the site with `?scandebug=1` (see [Contributing](CONTRIBUTING.md)).
 
-Pairing needs access to the site. File bytes do not go through the Worker. There is no LAN auto-discovery and no server relay. If the link fails, switch to cloud. Max 32 MiB per file, 64 MiB per batch, 32 KiB for text. Save each received file with a tap when done.
+Pairing needs access to the site. File bytes do not go through the Worker. The link is direct P2P on most networks: public STUN servers (Cloudflare, Google, plus bilibili and hitv for mainland China) only help each device learn its public IP and never see file content. There is no TURN and no server relay, so some networks (carrier-grade NAT, corporate or guest Wi-Fi) cannot connect; try the same Wi-Fi or switch to cloud. There is no LAN auto-discovery. Max 32 MiB per file, 64 MiB per batch, 32 KiB for text. Save each received file with a tap when done.
 
-The session belongs to the browser tab, not the LAN page: you can switch to the inbox, a drive or settings and come back still connected. While the LAN page is closed, the **LAN transfer** nav item shows a dot when linked and a count of offers and unsaved files, and toasts announce new offers and received files; offers always wait for you to accept. The session ends only when you tap **Disconnect**, close the tab, or the other side leaves:
+The session belongs to the browser tab, not the P2P Transfer page: you can switch to the inbox, a drive or settings and come back still connected. While the P2P Transfer page is closed, the **P2P Transfer** nav item shows a dot when linked and a count of offers and unsaved files, and toasts announce new offers and received files; offers always wait for you to accept. The session ends only when you tap **Disconnect**, close the tab, or the other side leaves:
 
 - **Intentional leave** (**Disconnect** or closing the tab) sends a bye. Both sides go back to the start screen at once. If you still have unsaved received files, **Disconnect** asks first; when the *other* side leaves, your unsaved files stay (with their batch) and a notice says so.
 - **Network drop** (no bye): the link shows **Reconnecting** and keeps trying, backing off from 1 s to 30 s, for up to 10 minutes. The room on the server is kept alive for that window. After 10 minutes the peer counts as gone and the session clears, keeping unsaved files.
@@ -73,7 +73,7 @@ If UI language was never saved: browser languages starting with `zh` get Chinese
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/TopCircle/DropRevive)
 
-The button copies this repository into your GitHub account, builds it with Workers Builds and deploys a Worker named `droprevive` on `workers.dev` with its two Durable Objects. Every push to your copy redeploys. Deploy first, configure later: the deploy asks for no secrets, and the site and LAN transfer work right away. Drives turn on as you add their values:
+The button copies this repository into your GitHub account, builds it with Workers Builds and deploys a Worker named `droprevive` on `workers.dev` with its two Durable Objects. Every push to your copy redeploys. Deploy first, configure later: the deploy asks for no secrets, and the site and P2P Transfer work right away. Drives turn on as you add their values:
 
 1. Open `https://droprevive.<your-subdomain>.workers.dev/setup`. It shows which drives are on, lists the six optional Worker secrets as set or not set (never their values), checks the cookie key, shows how `ALLOWED_ORIGINS` applies to this origin, and shows the exact callback URLs to register.
 2. Create a Google OAuth client and/or an Azure app with those callback URLs. Only one drive is fine: leave the other drive's two values unset (or `none`).
@@ -83,7 +83,7 @@ If `https://droprevive.<your-subdomain>.workers.dev` does not open after the fir
 
 Step-by-step guide, including your own domain and key rotation: [docs/self-host.md](docs/self-host.md) ([中文](docs/self-host.zh-CN.md)).
 
-All optional. A drive is on only when its client ID, its client secret and `DRIVE_COOKIE_KEY` are all set (unset or `none` = off); LAN transfer needs none of them.
+All optional. A drive is on only when its client ID, its client secret and `DRIVE_COOKIE_KEY` are all set (unset or `none` = off); P2P Transfer needs none of them.
 
 | Worker secret | What | Notes |
 | --- | --- | --- |
@@ -92,7 +92,7 @@ All optional. A drive is on only when its client ID, its client secret and `DRIV
 | `MS_CLIENT_ID` | Azure application (client) ID | Public value. Unset if you do not use OneDrive |
 | `MS_CLIENT_SECRET` | Azure client secret value | Expires within 24 months. Unset if you do not use OneDrive |
 | `DRIVE_COOKIE_KEY` | AES-GCM key for refresh-token cookies | 32 random bytes, base64: `openssl rand -base64 32`. Both drives need it |
-| `ALLOWED_ORIGINS` | Origins allowed for sign-in and LAN pairing | Optional. Unset or `none`: same-origin only (the site's own address, workers.dev or custom domain). Set: a strict comma-separated list, e.g. `https://droprevive.you.workers.dev,https://drop.example.com`. Only malformed entries → everything refused (fail closed) |
+| `ALLOWED_ORIGINS` | Origins allowed for sign-in and P2P pairing | Optional. Unset or `none`: same-origin only (the site's own address, workers.dev or custom domain). Set: a strict comma-separated list, e.g. `https://droprevive.you.workers.dev,https://drop.example.com`. Only malformed entries → everything refused (fail closed) |
 
 Sharing them between Workers of one Cloudflare account? Set the build variable `DROP_SECRETS_STORE_ID` and keep them in Cloudflare Secrets Store; see [Secrets Store in the guide](docs/self-host.md#optional-cloudflare-secrets-store). Off by default.
 
@@ -118,7 +118,7 @@ Maintainer client IDs are registered only for `https://drop.habor.dpdns.org`. Th
 
 - [Contributing](CONTRIBUTING.md) · [Architecture](docs/architecture.md) ([中文](docs/architecture.zh-CN.md)) · [Security policy](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 - GitHub Actions runs typecheck, tests, lint and build on pushes and pull requests. CI does not use deployment secrets.
-- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and LAN rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 37 script tests plus 323 others; lint is kept at 0 errors (the react-hooks `refs` and `set-state-in-effect` rules are temporarily warnings, to be fixed later).
+- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and P2P rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 37 script tests plus 323 others; lint is kept at 0 errors (the react-hooks `refs` and `set-state-in-effect` rules are temporarily warnings, to be fixed later).
 - Community and questions: the project's Telegram group, <https://t.me/droprevive>. Report security problems privately, see [SECURITY.md](SECURITY.md).
 - `wrangler.jsonc` is the public profile. The production site is a build profile in `scripts/wrangler-profile.mjs`; `npm test` checks that the public, production and staging configs come out as expected.
 

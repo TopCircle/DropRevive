@@ -4,7 +4,7 @@
 
 部署完成后，你会在自己的 Cloudflare 账号里拥有一份 DropRevive，用你自己的 OAuth 应用登录 Google Drive 和/或 OneDrive。Cloudflare 免费套餐就够用。整个过程大约 20–30 分钟，大部分时间花在 Google 和 Azure 控制台。
 
-**先部署，再配置。** 部署不需要任何密钥：部署完网站就能打开，局域网直传就能用。网盘在你补上对应的值之后才开通。
+**先部署，再配置。** 部署不需要任何密钥：部署完网站就能打开，点对点直传就能用。网盘在你补上对应的值之后才开通。
 
 1. 点按钮[部署](#1-部署)（约 2 分钟），什么都不用填。
 2. 打开新站点的 `/setup`，复制回调地址。
@@ -21,7 +21,7 @@
 1. 登录 Cloudflare，按提示连接你的 GitHub（或 GitLab）账号。
 2. 仓库名和 Worker 名可以保留默认（`droprevive`），也可以改。
 3. 构建设置保持原样。如果构建那两栏是空的（部署命令是 `npx wrangler deploy`），也没关系：`wrangler.jsonc` 会让直接跑的 `wrangler deploy` 先构建网站。这一步不会问密钥，部署完再加。
-4. 点部署。Cloudflare 会在你的账号里建仓库、构建、创建两个 Durable Object（局域网直传房间和限流），然后部署。
+4. 点部署。Cloudflare 会在你的账号里建仓库、构建、创建两个 Durable Object（点对点直传房间和限流），然后部署。
 
 站点地址是 `https://<Worker 名>.<你的子域>.workers.dev`（子域在后台 Workers & Pages 页面能看到）。以后你往自己那份仓库 push，都会自动重新部署，密钥会保留。
 
@@ -78,13 +78,13 @@ openssl rand -base64 32
 btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
 ```
 
-两个网盘都要用它：没有有效的密钥（没设、填了 `none`、或不是 32 字节）时两个网盘都不开通，局域网直传不受影响。`/setup` 会检查它解码后是不是正好 32 字节，但不会显示它。以后换掉它，所有设备都会退出网盘登录（重新连接一次即可）。
+两个网盘都要用它：没有有效的密钥（没设、填了 `none`、或不是 32 字节）时两个网盘都不开通，点对点直传不受影响。`/setup` 会检查它解码后是不是正好 32 字节，但不会显示它。以后换掉它，所有设备都会退出网盘登录（重新连接一次即可）。
 
 ## 允许的站点地址
 
-可选。**不设（或填 `none`）**：只允许同源。页面只能在它自己被打开的地址上登录网盘、配对局域网，所以 workers.dev 地址和自定义域名什么都不用配就能用。`/setup` 会显示「未设置：仅同源（当前：<地址>）」。
+可选。**不设（或填 `none`）**：只允许同源。页面只能在它自己被打开的地址上登录网盘、点对点直传配对，所以 workers.dev 地址和自定义域名什么都不用配就能用。`/setup` 会显示「未设置：仅同源（当前：<地址>）」。
 
-**设了**：`ALLOWED_ORIGINS` 就是严格的名单，列出这个 Worker 为哪些地址提供网盘登录和局域网配对：完整 origin，逗号分隔，不要带路径和结尾斜杠。不在名单里的地址都会被拒绝，包括你正在用的这个。例如：
+**设了**：`ALLOWED_ORIGINS` 就是严格的名单，列出这个 Worker 为哪些地址提供网盘登录和点对点直传配对：完整 origin，逗号分隔，不要带路径和结尾斜杠。不在名单里的地址都会被拒绝，包括你正在用的这个。例如：
 
 ```
 https://droprevive.you.workers.dev,https://drop.example.com
@@ -143,7 +143,7 @@ Worker 先读 Secrets Store 的值；store 里的值是空的或 `none` 时，�
 | 网盘显示「未开通」 | 它的客户端 ID、客户端密钥或 `DRIVE_COOKIE_KEY` 没设、是 `none` 或不对，看 `/setup` |
 | 构建日志：`The following required secrets have not been set` | 你的仓库是从要求必填密钥的旧版本复制的。在 **Settings → Variables and Secrets** 把 6 项加上（暂时没有的填 `none`）再 **Retry build**，或者从上游更新你的仓库 |
 | `redirect_uri_mismatch`（Google）或 `AADSTS50011`（Azure） | 控制台里的回调地址和 `/setup` 显示的不一致（协议、域名、路径） |
-| `origin_not_allowed`，登录或配对被拒（创建局域网房间 403） | 设了 `ALLOWED_ORIGINS`，但名单里没有当前地址（或全是格式不对的条目）：把它加进去，或删掉这个变量改为仅同源 |
+| `origin_not_allowed`，登录或配对被拒（创建直传房间 403） | 设了 `ALLOWED_ORIGINS`，但名单里没有当前地址（或全是格式不对的条目）：把它加进去，或删掉这个变量改为仅同源 |
 | Google 登录一周后失效 | 同意屏幕还在测试状态，去发布 |
 | 所有设备都被登出 | 换过 `DRIVE_COOKIE_KEY`，或客户端密钥过期了 |
 | 构建日志：`Missing entry-point to Worker script or to assets directory` | `wrangler deploy` 之前没有构建网站（仓库是从旧版本复制的）。Workers & Pages → 你的 Worker → **Settings → Build**：**Deploy command（部署命令）** 改成 `npm run deploy`（它会构建、核对再部署；**Build command（构建命令）** 留空或填 `npm run build` 都行），保存后到 **Deployments → Retry build** 重新构建 |

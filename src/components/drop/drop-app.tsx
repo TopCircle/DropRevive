@@ -401,19 +401,19 @@ export function DropApp() {
                   <RefreshCw className={`size-4 ${syncing ? "animate-spin" : ""}`} />
                 </Button>
               </div>
-              <div className="flex flex-wrap items-center gap-1">
-                <Button variant="ghost" size="sm" className="justify-start" onClick={openSettings}>
+              <div className="flex flex-nowrap items-center gap-0.5">
+                <Button variant="ghost" size="sm" className="justify-start px-2" onClick={openSettings}>
                   <Settings className="size-4" />
                   {t("nav.settingsShort")}
                 </Button>
-                <Button variant="ghost" size="sm" className="justify-start" asChild>
+                <Button variant="ghost" size="sm" className="justify-start px-2" asChild>
                   <a href={TELEGRAM_URL} target="_blank" rel="noopener noreferrer" aria-label={t("nav.telegram")} title={t("nav.telegram")}>
                     <TelegramIcon className="size-4" />
                     {t("nav.telegramShort")}
                   </a>
                 </Button>
                 {installEvent && (
-                  <Button variant="ghost" size="sm" onClick={() => void installEvent.prompt().then(() => setInstallEvent(null))}>
+                  <Button variant="ghost" size="sm" className="px-2" onClick={() => void installEvent.prompt().then(() => setInstallEvent(null))}>
                     <Download className="size-4" />
                     {t("nav.install")}
                   </Button>

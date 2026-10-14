@@ -65,3 +65,11 @@ test("control messages reject extra fields and oversized manifest text", () => {
   assert.equal(decodeControl(JSON.stringify({ t: "accept" })), null);
   assert.equal(decodeControl(JSON.stringify({ t: "accept", id: "ZZZZZZZZ", ok: true })), null);
 });
+
+test("cancel carries only the direct-failed reason", () => {
+  const token = "a".repeat(32);
+  const failed = { type: "cancel" as const, token, reason: "direct-failed" as const };
+  assert.deepEqual(decodeSignal(encodeSignal(failed)), failed);
+  assert.deepEqual(decodeSignal(JSON.stringify({ type: "cancel", token, reason: "other" })), { type: "cancel", token });
+  assert.deepEqual(decodeSignal(encodeSignal({ type: "cancel", token })), { type: "cancel", token });
+});

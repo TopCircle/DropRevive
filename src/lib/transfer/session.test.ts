@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ICE_SERVERS } from "./ice.ts";
 import { connectSession, exposePeer, type DataChannelLike, type PeerLike } from "./session.ts";
 
 test("event handler setters run against the native peer", () => {
@@ -23,7 +24,7 @@ test("event handler setters run against the native peer", () => {
   assert.equal(stored, handler);
 });
 
-test("host sends an offer and applies the guest answer without ice servers", async () => {
+test("host sends an offer and applies the guest answer with public STUN only (no TURN)", async () => {
   const sent: unknown[] = [];
   let remote: unknown = null;
   const peer: PeerLike = {
@@ -56,7 +57,10 @@ test("host sends an offer and applies the guest answer without ice servers", asy
     sendSignal: (payload) => sent.push(payload),
   });
   await session.acceptSignal({ kind: "answer", sdp: "answer-sdp", gen: 1 });
-  assert.deepEqual(peer.config, { iceServers: [] });
+  assert.deepEqual(peer.config, { iceServers: ICE_SERVERS });
+  const urls = ICE_SERVERS.flatMap((s) => [s.urls].flat());
+  assert.ok(urls.length > 0 && urls.every((u) => u.startsWith("stun:")));
+  assert.deepEqual(urls, ["stun:stun.cloudflare.com:3478", "stun:stun.l.google.com:19302", "stun:stun.chat.bilibili.com:3478", "stun:stun.hitv.com:3478"]);
   assert.deepEqual(sent[0], { kind: "offer", sdp: "offer-sdp", gen: 1, fresh: true });
   assert.deepEqual(remote, { type: "answer", sdp: "answer-sdp" });
   peer.onicecandidate?.({ candidate: { toJSON: () => ({ candidate: "c", sdpMid: "0", sdpMLineIndex: 1, usernameFragment: "u" }) } });
@@ -456,4 +460,46 @@ test("a host offer waits for an open socket and a guest candidate does not wait 
   });
   guest.onicecandidate?.({ candidate: { toJSON: () => ({ candidate: "g", sdpMid: "0", sdpMLineIndex: 0 }) } });
   assert.deepEqual(sent, [{ kind: "candidate", init: { candidate: "g", sdpMid: "0", sdpMLineIndex: 0 }, gen: 1 }]);
+});
+
+test("ICE failure is reported as a failed connection right away", async () => {
+  const states: (string | undefined)[] = [];
+  const peer: PeerLike = {
+    config: null,
+    onicecandidate: null,
+    onconnectionstatechange: null,
+    ondatachannel: null,
+    connectionState: "connecting",
+    iceConnectionState: "checking",
+    createDataChannel() {
+      return {
+        readyState: "connecting",
+        send() {},
+        close() {},
+        binaryType: "arraybuffer",
+        onopen: null,
+        onmessage: null,
+        onclose: null,
+      };
+    },
+    async createOffer() {
+      return { type: "offer", sdp: "offer-sdp" };
+    },
+    async createAnswer() {
+      return { type: "answer", sdp: "answer-sdp" };
+    },
+    async setLocalDescription() {},
+    async setRemoteDescription() {},
+    async addIceCandidate() {},
+    close() {},
+  };
+  await connectSession({
+    role: "host",
+    createPeer: () => peer,
+    sendSignal: () => undefined,
+    onConnectionState: (state) => states.push(state),
+  });
+  peer.iceConnectionState = "failed";
+  peer.oniceconnectionstatechange?.();
+  assert.deepEqual(states, ["failed"]);
 });

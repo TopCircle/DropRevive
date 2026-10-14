@@ -1,6 +1,7 @@
 import { CONNECT_TIMEOUT_MS, ICE_TIMEOUT_MS } from "./limits.ts";
 import { emptyNegotiation, emptyOutbox, flushHeld, noteSignal, rememberAnswer, stageOutgoing, type HeldOutbox, type NegState } from "./negotiation.ts";
 import type { IceInit, SignalPayload } from "./protocol.ts";
+import { PEER_CONFIG } from "./ice.ts";
 
 export interface DataChannelLike {
   readyState: string;
@@ -17,6 +18,8 @@ export interface PeerLike {
   config: RTCConfiguration | null;
   onicecandidate: ((event: { candidate: { toJSON(): RTCIceCandidateInit } | null }) => void) | null;
   onconnectionstatechange: (() => void) | null;
+  oniceconnectionstatechange?: (() => void) | null;
+  iceConnectionState?: RTCIceConnectionState;
   ondatachannel: ((event: { channel: DataChannelLike }) => void) | null;
   connectionState?: RTCPeerConnectionState;
   createDataChannel(label: string): DataChannelLike;
@@ -132,7 +135,7 @@ export async function connectSession(input: {
   onChannel?: (channel: DataChannelLike) => void;
   onChannelClose?: () => void;
 }): Promise<Session> {
-  let peer = input.createPeer({ iceServers: [] });
+  let peer = input.createPeer({ ...PEER_CONFIG });
   let currentGen = 1;
   let neg: NegState = emptyNegotiation();
   let channel: DataChannelLike | null = null;
@@ -174,7 +177,7 @@ export async function connectSession(input: {
     target.ondatachannel = null;
   };
   const watch = (target: PeerLike) => {
-    target.config = { iceServers: [] };
+    target.config = { ...PEER_CONFIG };
     target.onicecandidate = (event) => {
       if (target !== peer) return;
       const init = event.candidate?.toJSON();
@@ -186,6 +189,11 @@ export async function connectSession(input: {
     target.onconnectionstatechange = () => {
       if (target !== peer) return;
       input.onConnectionState?.(target.connectionState, target);
+    };
+    // ICE "failed" can arrive before the overall connection state does; report it right away.
+    target.oniceconnectionstatechange = () => {
+      if (target !== peer) return;
+      if (target.iceConnectionState === "failed" && target.connectionState !== "failed") input.onConnectionState?.("failed", target);
     };
     target.ondatachannel = (event) => {
       if (target !== peer) return;
@@ -222,7 +230,7 @@ export async function connectSession(input: {
   const prepareOffer = (payload: SignalPayload) => {
     if (payload.kind !== "offer" || input.role !== "guest") return;
     if (payload.gen <= neg.pendingGen) return;
-    const replacement = payload.fresh && neg.pendingGen > 0 ? input.createPeer({ iceServers: [] }) : undefined;
+    const replacement = payload.fresh && neg.pendingGen > 0 ? input.createPeer({ ...PEER_CONFIG }) : undefined;
     beginGeneration({ gen: payload.gen, fresh: payload.fresh, peer: replacement });
   };
   watch(peer);
@@ -304,7 +312,7 @@ export async function connectSession(input: {
       const gen = Math.min(255, (currentGen || 1) + 1);
       try {
         if (fresh) {
-          const next = input.createPeer({ iceServers: [] });
+          const next = input.createPeer({ ...PEER_CONFIG });
           beginGeneration({ gen, fresh: true, peer: next });
           const offer = await next.createOffer();
           await next.setLocalDescription(offer);

@@ -52,15 +52,15 @@ flowchart LR
   Store ==>|"short-lived access token<br/>upload, list, download, delete"| OD
 
   UI -->|"pairing and signaling (WebSocket)"| TAPI
-  UI <-.->|"WebRTC DataChannel<br/>LAN direct, not via Worker"| Peer["DropRevive on another device"]
+  UI <-.->|"WebRTC DataChannel<br/>P2P direct, not via Worker"| Peer["DropRevive on another device"]
 ```
 
 要点：
 
-- 文件和文字的字节只在两处流动：浏览器和用户自己的网盘之间（云端投送），或者两台设备之间（局域网直传）。Worker 不代理网盘请求，也不转发直传的字节。
-- Worker 只做三件事：发页面；替浏览器向 Google / Microsoft 换令牌（需要 client secret 的那一步）；局域网直传的配对和信令。
+- 文件和文字的字节只在两处流动：浏览器和用户自己的网盘之间（云端投送），或者两台设备之间（点对点直传）。Worker 不代理网盘请求，也不转发直传的字节。
+- Worker 只做三件事：发页面；替浏览器向 Google / Microsoft 换令牌（需要 client secret 的那一步）；点对点直传的配对和信令。
 - 没有数据库。登录状态是浏览器里的加密 cookie。Durable Object 只放直传房间（代码、两端的随机令牌和设备名，10 分钟没配上就过期，会话最长 2 小时）和一分钟窗口的限流计数。
-- 局域网直传的 `RTCPeerConnection` 用 `iceServers: []`，不用 STUN，也不用 TURN，所以只在两台设备能直接互通时连得上（同一个局域网）。访客网络隔离、VPN、蜂窝网会失败，界面会让用户改用云端。
+- 直传的 `RTCPeerConnection` 只用公共 STUN（`src/lib/transfer/ice.ts`：Cloudflare、Google，以及国内的 bilibili、hitv；浏览器并行查询），不用 TURN。STUN 让不同网络的设备多数情况下也能直连，它只看到公网 IP，看不到文件内容；不做任何中继。运营商大内网、公司或访客 Wi-Fi 隔离和部分 VPN 仍会失败，界面会建议连同一个 Wi-Fi 或改用云端。
 - `npm run dev`（Vite）里没有 Durable Object，`/api/transfer` 返回 404；直传只能在部署后的 Worker 上试（不设 `ALLOWED_ORIGINS` 时在 Worker 自己的地址上可用；设了的话名单里须包含该站点的 origin）。
 
 ## 2. 登录和续签
@@ -193,9 +193,9 @@ flowchart TB
 
 同步运行期间到来的同步请求会共用这一轮，并且只再排一轮。列表中途失败不会清掉已有的本地历史。store 有单元测试（`store.test.ts`、`store.sync.test.ts`），用假的网盘客户端（`store.test-fakes.ts`）。
 
-## 6. 局域网直传：HTTP 入口和页面内扫码器
+## 6. 点对点直传：HTTP 入口和页面内扫码器
 
-`server/transfer-http.ts` 是局域网配对唯一的 HTTP 入口。它检查请求来源（先要求与请求同主机，再按 `ALLOWED_ORIGINS`，不设时按同源）；声明的 `Content-Length` 超过上限时，读取前就拒绝；请求体按流读取，超过上限立即取消（分块或少报长度的请求体不会被整个缓冲）；解析出的 JSON 还要校验：必须是普通对象，`deviceName` 和 `code` 必须是符合格式的字符串，多余的未知字段忽略。超大请求返回 413，格式不对返回 400，这条路径不应出现 500。
+`server/transfer-http.ts` 是点对点直传配对唯一的 HTTP 入口。它检查请求来源（先要求与请求同主机，再按 `ALLOWED_ORIGINS`，不设时按同源）；声明的 `Content-Length` 超过上限时，读取前就拒绝；请求体按流读取，超过上限立即取消（分块或少报长度的请求体不会被整个缓冲）；解析出的 JSON 还要校验：必须是普通对象，`deviceName` 和 `code` 必须是符合格式的字符串，多余的未知字段忽略。超大请求返回 413，格式不对返回 400，这条路径不应出现 500。
 
 ```mermaid
 flowchart LR
@@ -220,7 +220,7 @@ flowchart LR
 - `?scandebug=1` 会显示诊断浮层（解码器、支持的格式、摄像头能力、最近的错误和结果），默认隐藏。
 - 面向用户的失败提示（没给权限、没有摄像头、别的站点的码、10 秒什么都没读到）用 toast 或面板原有的提示区域，不会在画面上盖文字。
 
-## 7. 局域网直传会话的生命周期
+## 7. 点对点直传会话的生命周期
 
 会话属于标签页，不属于面板。`src/lib/transfer/lan-session.ts`（zustand store，每个标签页在 `src/components/drop/lan-session-store.ts` 里创建一次）持有房间、WebRTC 连接（`link.ts`）、时间线和收到的文件。`transfer-panel.tsx` 只订阅状态、调用动作；面板卸载只关摄像头。`lan-badge.tsx` 显示导航徽标；面板没打开时用带「查看」按钮的提示代替。纯函数（时间线上限、未保存统计、徽标、回到前台的检查）在 `session-state.ts`。
 
