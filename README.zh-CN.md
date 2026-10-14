@@ -24,7 +24,7 @@ DropRevive 是独立项目，用来补 Edge Drop 停用之后的同类需求。�
 
 配对时要能访问站点。传文件时不经过 Worker。大多数网络下是点对点直连：公共 STUN 服务器（Cloudflare、Google，以及国内的 bilibili、hitv）只用来让设备知道自己的公网 IP，看不到文件内容。没有 TURN，也没有服务器中继，所以部分网络（运营商大内网、公司或访客 Wi-Fi）连不上，可以换到同一个 Wi-Fi，或改用云端。没有局域网自动发现。单文件最大 32 MiB，整批最大 64 MiB，文字最大 32 KiB。传完后逐个点击保存。
 
-会话属于浏览器标签页，不属于局域网直传页面：可以切到收件箱、网盘或设置，回来时仍然连着。局域网直传页面没打开时，导航里的「局域网直传」会显示绿点（已连接）和待处理数量（待接收的发送、没保存的文件），新的发送和收到的文件会弹出提示；对方发来的内容一律等你点接收。只有三种情况会结束会话：点「断开」、关掉标签页、对方离开：
+会话属于浏览器标签页，不属于点对点直传页面：可以切到收件箱、网盘或设置，回来时仍然连着。点对点直传页面没打开时，导航里的「点对点直传」会显示绿点（已连接）和待处理数量（待接收的发送、没保存的文件），新的发送和收到的文件会弹出提示；对方发来的内容一律等你点接收。只有三种情况会结束会话：点「断开」、关掉标签页、对方离开：
 
 - **主动离开**（点断开或关标签页）会发出 bye，两边立刻回到初始界面。自己还有没保存的文件时，断开前会先确认；**对方**离开时，没保存的文件会留下（连同所在那一批），并给出提示。
 - **网络中断**（没有 bye）：显示「重连中」并自动重试，间隔从 1 秒逐步加到 30 秒，最多 10 分钟；服务器上的房间会为这段时间保留。10 分钟还没连回来，就当对方已离开，清空会话，没保存的文件仍保留。
@@ -73,7 +73,7 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/TopCircle/DropRevive)
 
-点这个按钮，Cloudflare 会把本仓库复制到你的 GitHub 账号，用 Workers Builds 构建，并在 `workers.dev` 上部署一个名为 `droprevive` 的 Worker（带两个 Durable Object）。之后你往自己那份仓库 push，都会自动重新部署。先部署，再配置：部署时不问任何密钥，网站和局域网直传马上就能用；网盘在补上对应的值之后开通：
+点这个按钮，Cloudflare 会把本仓库复制到你的 GitHub 账号，用 Workers Builds 构建，并在 `workers.dev` 上部署一个名为 `droprevive` 的 Worker（带两个 Durable Object）。之后你往自己那份仓库 push，都会自动重新部署。先部署，再配置：部署时不问任何密钥，网站和点对点直传马上就能用；网盘在补上对应的值之后开通：
 
 1. 打开 `https://droprevive.<你的子域>.workers.dev/setup`。这页显示哪些网盘已开通，列出 6 个可选的 Worker 密钥是否已设置（不显示值），检查 Cookie 密钥是否有效、`ALLOWED_ORIGINS` 对当前地址的效果，并给出要登记的回调地址。
 2. 用这两个回调地址建 Google OAuth 客户端和/或 Azure 应用。只用一个网盘也可以：另一个网盘的两项不填（或填 `none`）。
@@ -83,7 +83,7 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 
 详细步骤（含自定义域名、密钥轮换）：[docs/self-host.zh-CN.md](docs/self-host.zh-CN.md)（[English](docs/self-host.md)）。
 
-全部可选。一个网盘要同时有客户端 ID、客户端密钥和 `DRIVE_COOKIE_KEY` 才会开通（不设或 `none` = 不开通）；局域网直传一项都不需要。
+全部可选。一个网盘要同时有客户端 ID、客户端密钥和 `DRIVE_COOKIE_KEY` 才会开通（不设或 `none` = 不开通）；点对点直传一项都不需要。
 
 | Worker 密钥 | 是什么 | 说明 |
 | --- | --- | --- |
@@ -92,7 +92,7 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 | `MS_CLIENT_ID` | Azure 应用（客户端）ID | 公开值。不用 OneDrive 就不设 |
 | `MS_CLIENT_SECRET` | Azure 客户端密钥的「值」 | 最长 24 个月到期。不用 OneDrive 就不设 |
 | `DRIVE_COOKIE_KEY` | 刷新令牌 cookie 的 AES-GCM 密钥 | 32 随机字节的 base64：`openssl rand -base64 32`。两个网盘都要用 |
-| `ALLOWED_ORIGINS` | 允许网盘登录和局域网配对的站点地址 | 可选。不设或 `none`：只允许同源（站点自己的地址，workers.dev 或自定义域名）。设了：严格名单，逗号分隔，例如 `https://droprevive.you.workers.dev,https://drop.example.com`。全是格式不对的条目时一律拒绝 |
+| `ALLOWED_ORIGINS` | 允许网盘登录和点对点直传配对的站点地址 | 可选。不设或 `none`：只允许同源（站点自己的地址，workers.dev 或自定义域名）。设了：严格名单，逗号分隔，例如 `https://droprevive.you.workers.dev,https://drop.example.com`。全是格式不对的条目时一律拒绝 |
 
 想在同一个 Cloudflare 账号的几个 Worker 之间共用这些值？设构建变量 `DROP_SECRETS_STORE_ID`，把值放进 Cloudflare Secrets Store，见[指南里的 Secrets Store 一节](docs/self-host.zh-CN.md#可选cloudflare-secrets-store)。默认不启用。
 
@@ -118,7 +118,7 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 
 - [参与开发](CONTRIBUTING.md) · [架构说明](docs/architecture.zh-CN.md)（[English](docs/architecture.md)）· [安全策略](SECURITY.md) · [行为准则](CODE_OF_CONDUCT.md)
 - GitHub Actions 会在 push 和 pull request 时运行类型检查、测试、lint 和构建；CI 不使用部署密钥。
-- `npm test` 先跑脚本测试，再跑单元和集成测试：传送协议和局域网房间、扫码辅助逻辑、网盘登录经纪、跨标签页续签，以及网盘 store（同步、删除、令牌过期）。写这段时共有 37 个脚本测试加 323 个其他测试；lint 保持 0 error（react-hooks 的 `refs` 和 `set-state-in-effect` 两条规则暂时为 warning，之后修复）。
+- `npm test` 先跑脚本测试，再跑单元和集成测试：传送协议和直传房间、扫码辅助逻辑、网盘登录经纪、跨标签页续签，以及网盘 store（同步、删除、令牌过期）。写这段时共有 37 个脚本测试加 323 个其他测试；lint 保持 0 error（react-hooks 的 `refs` 和 `set-state-in-effect` 两条规则暂时为 warning，之后修复）。
 - 交流和提问：项目的 Telegram 群组 <https://t.me/droprevive>。安全问题请私下报告，见 [SECURITY.md](SECURITY.md)。
 - `wrangler.jsonc` 是公开配置。正式站是 `scripts/wrangler-profile.mjs` 里的一个构建配置；`npm test` 会检查公开、正式、测试站三套配置生成得对不对。
 

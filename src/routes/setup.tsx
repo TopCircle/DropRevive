@@ -73,7 +73,7 @@ function Verdict({ status }: { status: SetupStatus }) {
       data-ready={status.ready ? "yes" : "no"}
       className="mt-5 rounded-lg border border-border bg-card px-4 py-3"
     >
-      <p className="font-medium text-ok">✓ 网站已部署，局域网直传可以用 · Deployed; LAN transfer works</p>
+      <p className="font-medium text-ok">✓ 网站已部署，点对点直传可以用 · Deployed; P2P Transfer works</p>
       {status.ready ? (
         <p className="font-medium text-ok">✓ 网盘已开通：{drives.join("、")} · Drives on: {drives.join(", ")}</p>
       ) : (
@@ -192,7 +192,7 @@ function DriveLines({ status }: { status: SetupDetails }) {
     <ul className="mt-2 space-y-0.5 text-xs" data-testid="setup-drives">
       {line(status.drives.google, "Google Drive")}
       {line(status.drives.microsoft, "OneDrive")}
-      <li className="text-ok">✓ 局域网直传 · LAN transfer：不需要任何密钥 · needs no secrets</li>
+      <li className="text-ok">✓ 点对点直传 · P2P Transfer：不需要任何密钥 · needs no secrets</li>
     </ul>
   );
 }

@@ -16,7 +16,7 @@ We will acknowledge your report, keep you informed while we fix it, and credit y
 
 ### Scope
 
-The production site https://drop.habor.dpdns.org and the code in this repository: the Worker routes under `/api/drive-auth` and `/api/transfer`, the LAN transfer rooms, and the browser app. Problems in Google Drive, OneDrive or Cloudflare themselves should go to those vendors.
+The production site https://drop.habor.dpdns.org and the code in this repository: the Worker routes under `/api/drive-auth` and `/api/transfer`, the P2P Transfer rooms, and the browser app. Problems in Google Drive, OneDrive or Cloudflare themselves should go to those vendors.
 
 Only the latest code on `main` (and the build marked by the `production` tag) is supported.
 
@@ -34,6 +34,6 @@ Only the latest code on `main` (and the build marked by the `production` tag) is
 
 ### 范围
 
-正式站 https://drop.habor.dpdns.org 和本仓库代码：`/api/drive-auth` 与 `/api/transfer` 下的 Worker 路由、局域网传送房间、浏览器端应用。Google Drive、OneDrive 或 Cloudflare 本身的问题请报告给对应厂商。
+正式站 https://drop.habor.dpdns.org 和本仓库代码：`/api/drive-auth` 与 `/api/transfer` 下的 Worker 路由、点对点直传房间、浏览器端应用。Google Drive、OneDrive 或 Cloudflare 本身的问题请报告给对应厂商。
 
 只支持 `main` 上的最新代码（以及 `production` 标签所指的构建）。

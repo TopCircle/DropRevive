@@ -26,7 +26,7 @@ CI (GitHub Actions) runs `npm ci`, typecheck, test, lint and build on every push
 
 ### Testing on a phone
 
-Camera and focus behaviour cannot be checked in a desktop browser, so try LAN pairing on a real phone against a deployed Worker (a test site exists for maintainers; its address is not public, and `npm run dev` has no Durable Objects, so `/api/transfer` returns 404 there). To see what the in-page QR scanner is doing, open the site with `?scandebug=1` (for example `https://YOUR_SITE/?scandebug=1`) and start a scan. A small overlay shows the decoder in use (native or jsQR), whether `BarcodeDetector` exists and which formats it reports, the camera resolution and focus/torch capabilities, the last error, and the last decoded text; a copy button puts it on the clipboard so you can paste it into a bug report. It is off unless the query parameter is present. A phone where `BarcodeDetector` exists but never reads anything is the case the jsQR fallback is for; report the overlay text if the fallback also fails.
+Camera and focus behaviour cannot be checked in a desktop browser, so try P2P pairing on a real phone against a deployed Worker (a test site exists for maintainers; its address is not public, and `npm run dev` has no Durable Objects, so `/api/transfer` returns 404 there). To see what the in-page QR scanner is doing, open the site with `?scandebug=1` (for example `https://YOUR_SITE/?scandebug=1`) and start a scan. A small overlay shows the decoder in use (native or jsQR), whether `BarcodeDetector` exists and which formats it reports, the camera resolution and focus/torch capabilities, the last error, and the last decoded text; a copy button puts it on the clipboard so you can paste it into a bug report. It is off unless the query parameter is present. A phone where `BarcodeDetector` exists but never reads anything is the case the jsQR fallback is for; report the overlay text if the fallback also fails.
 
 ### Workflow
 
@@ -76,7 +76,7 @@ CI（GitHub Actions）在每次 push 和 pull request 时跑 `npm ci`、类型�
 
 ### 在手机上测试
 
-摄像头和对焦的表现在桌面浏览器里验证不了，所以局域网配对要在真机上对着已部署的 Worker 测（维护者有一个测试站，地址不公开；`npm run dev` 没有 Durable Object，那里 `/api/transfer` 返回 404）。想看页面内扫码器在做什么，用 `?scandebug=1` 打开站点（例如 `https://你的站点/?scandebug=1`）再开始扫码。会出现一个小浮层，显示正在用的解码器（原生或 jsQR）、`BarcodeDetector` 是否存在及其支持的格式、摄像头分辨率和对焦 / 手电筒能力、最近一次错误、最近一次读到的文字；复制按钮可以把内容放进剪贴板，方便贴进问题报告。不带这个参数时浮层不出现。`BarcodeDetector` 存在却始终读不出东西，正是 jsQR 兜底要解决的情况；如果兜底也不行，请把浮层文字发来。
+摄像头和对焦的表现在桌面浏览器里验证不了，所以点对点直传配对要在真机上对着已部署的 Worker 测（维护者有一个测试站，地址不公开；`npm run dev` 没有 Durable Object，那里 `/api/transfer` 返回 404）。想看页面内扫码器在做什么，用 `?scandebug=1` 打开站点（例如 `https://你的站点/?scandebug=1`）再开始扫码。会出现一个小浮层，显示正在用的解码器（原生或 jsQR）、`BarcodeDetector` 是否存在及其支持的格式、摄像头分辨率和对焦 / 手电筒能力、最近一次错误、最近一次读到的文字；复制按钮可以把内容放进剪贴板，方便贴进问题报告。不带这个参数时浮层不出现。`BarcodeDetector` 存在却始终读不出东西，正是 jsQR 兜底要解决的情况；如果兜底也不行，请把浮层文字发来。
 
 ### 流程
 

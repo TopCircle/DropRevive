@@ -52,16 +52,16 @@ flowchart LR
   Store ==>|"short-lived access token<br/>upload, list, download, delete"| OD
 
   UI -->|"pairing and signaling (WebSocket)"| TAPI
-  UI <-.->|"WebRTC DataChannel<br/>LAN direct, not via Worker"| Peer["DropRevive on another device"]
+  UI <-.->|"WebRTC DataChannel<br/>P2P direct, not via Worker"| Peer["DropRevive on another device"]
 ```
 
 Key points:
 
-- File and text bytes flow in only two places: between the browser and the user's own drive (cloud drop), or between two devices (LAN transfer). The Worker does not proxy drive calls and does not forward transfer payloads.
-- The Worker does three things: serve pages; exchange tokens with Google / Microsoft for the browser (the client-secret step); and LAN pairing / signaling.
+- File and text bytes flow in only two places: between the browser and the user's own drive (cloud drop), or between two devices (P2P Transfer). The Worker does not proxy drive calls and does not forward transfer payloads.
+- The Worker does three things: serve pages; exchange tokens with Google / Microsoft for the browser (the client-secret step); and P2P pairing / signaling.
 - There is no database. Sign-in state is an encrypted cookie in the browser. Durable Objects hold only transfer rooms (code, both sides' random tokens and device names; expire after 10 minutes unpaired, session max 2 hours) and one-minute rate-limit counters.
 - The direct-transfer `RTCPeerConnection` uses public STUN only (`src/lib/transfer/ice.ts`: Cloudflare and Google, plus bilibili and hitv for mainland China; the browser queries them in parallel), no TURN. STUN lets peers on different networks often connect directly and sees only public IPs, never file content; nothing is relayed. Carrier-grade NAT, corporate/guest Wi-Fi isolation and some VPNs still fail; the UI suggests the same Wi-Fi or cloud drop.
-- `npm run dev` (Vite) has no Durable Objects; `/api/transfer` returns 404. Try LAN transfer only on a deployed Worker (with `ALLOWED_ORIGINS` unset it works on the Worker's own origin; when set, it must list that origin).
+- `npm run dev` (Vite) has no Durable Objects; `/api/transfer` returns 404. Try P2P Transfer only on a deployed Worker (with `ALLOWED_ORIGINS` unset it works on the Worker's own origin; when set, it must list that origin).
 
 ## 2. Sign-in and refresh
 
@@ -193,9 +193,9 @@ flowchart TB
 
 Sync requests that arrive during a run share it and queue exactly one more pass. A listing that fails part-way never wipes existing local history. The store has unit tests (`store.test.ts`, `store.sync.test.ts`) built on fake drive clients (`store.test-fakes.ts`).
 
-## 6. LAN transfer: HTTP entry and the in-page scanner
+## 6. P2P Transfer: HTTP entry and the in-page scanner
 
-`server/transfer-http.ts` is the only HTTP entry for LAN pairing. It checks the request origin (same host as the request, then `ALLOWED_ORIGINS` or, when unset, same-origin), rejects a declared `Content-Length` over the cap before reading, reads the body as a stream and cancels it once it passes the cap (so chunked or under-declared bodies are never buffered whole), and validates the parsed JSON: it must be a plain object, `deviceName` and `code` must be strings of the allowed shape, and unknown extra keys are ignored. Oversized requests get 413, malformed ones 400, and nothing in this path should produce a 500.
+`server/transfer-http.ts` is the only HTTP entry for P2P pairing. It checks the request origin (same host as the request, then `ALLOWED_ORIGINS` or, when unset, same-origin), rejects a declared `Content-Length` over the cap before reading, reads the body as a stream and cancels it once it passes the cap (so chunked or under-declared bodies are never buffered whole), and validates the parsed JSON: it must be a plain object, `deviceName` and `code` must be strings of the allowed shape, and unknown extra keys are ignored. Oversized requests get 413, malformed ones 400, and nothing in this path should produce a 500.
 
 ```mermaid
 flowchart LR
@@ -220,7 +220,7 @@ Notes:
 - `?scandebug=1` shows a diagnostic overlay (decoder, formats, camera capabilities, last error and result). It is hidden by default.
 - User-facing failures (permission denied, no camera, other site's code, nothing read after 10 s) are toasts or the panel's normal notice area, never text over the picture.
 
-## 7. LAN session lifecycle
+## 7. P2P session lifecycle
 
 The session is owned by the tab, not by the panel. `src/lib/transfer/lan-session.ts` (a zustand store, created once per tab in `src/components/drop/lan-session-store.ts`) owns the room, the WebRTC link (`link.ts`), the timeline and the received files. `transfer-panel.tsx` only subscribes and calls actions; unmounting it closes the camera, nothing else. `lan-badge.tsx` shows the nav badge; toasts with an Open action stand in for the panel while it is closed. Pure helpers (timeline cap, unsaved totals, badge, visibility nudge) are in `session-state.ts`.
 
