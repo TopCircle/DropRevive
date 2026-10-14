@@ -10,11 +10,17 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 - **「局域网直传」改名为「点对点直传」**：不同网络下也能直连，同一个 Wi-Fi 下最稳；网址和内部名称不变。
 - **直传支持公共 STUN**（Cloudflare、Google，以及国内的 bilibili、hitv），不同网络下多数情况也能点对点直连；STUN 只看到公网 IP，看不到文件内容；仍然没有 TURN、没有中继。
 - 连不上时的提示说明了原因（运营商大内网、公司或访客 Wi-Fi），并建议连同一个 Wi-Fi。
+- 直传界面更清楚：连接中显示「正在建立直连…」，连通后才出现发送按钮；直连失败会很快告知双方原因，可「重新开始」或改用云端收件箱；最长等待 20 秒。
+- 手机侧栏底部按钮不再换行；英文界面统一使用「Privacy Policy」，输入框提示改为「Type, or drop files here」。
+- 依赖更新（setup-node、lucide-react、globals、eslint-plugin-react-hooks 7），移除未使用的 react-day-picker；README 致谢 LINUX DO。
 
 ### English
 - **"LAN transfer" is now "P2P Transfer"**: it can connect across networks and works best on the same Wi-Fi; URLs and internal names are unchanged.
 - **Direct transfer uses public STUN** (Cloudflare, Google, plus bilibili and hitv for mainland China), so peers on different networks can usually connect P2P; STUN sees only public IPs, never file content; still no TURN and no relay.
 - The connection-failed message now explains why (carrier-grade NAT, corporate or guest Wi-Fi) and suggests the same Wi-Fi.
+- Clearer direct-transfer states: "Connecting…" until the link is up, and the send button only appears once connected; a failed link quickly tells both sides why, with Start over or Use cloud inbox; capped at 20 s.
+- Mobile sidebar footer buttons no longer wrap; English settings say "Privacy Policy" consistently, and the composer placeholder is now "Type, or drop files here".
+- Dependency updates (setup-node, lucide-react, globals, eslint-plugin-react-hooks 7); removed unused react-day-picker; README thanks LINUX DO.
 
 ## [1.0.0] - 2026-10-13
 
