@@ -125,7 +125,7 @@ export const en: LanguagePack = {
     "composer.send": "Send",
     "composer.sendNeedDrive": "Connect a drive to send",
     "composer.contentLabel": "Drop",
-    "composer.placeholder": "Write something, or drop images and files here",
+    "composer.placeholder": "Type, or drop files here",
     "composer.unnamed": "Untitled file",
     "composer.remove": "Remove",
     "composer.attach": "Add attachment",
