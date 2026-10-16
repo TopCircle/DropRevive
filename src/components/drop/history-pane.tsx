@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { filterItems } from "@/lib/drop/meta";
 import { BubbleCard, type Scope } from "@/components/drop/desktop-shell";
+import { CopyText } from "@/components/drop/copy-text";
 import { scopeLabel } from "@/components/drop/scope";
 import { inScope } from "@/lib/drop/desktop-search";
 import { oldestFirst, ownNewestKey, useStickToBottom } from "@/components/drop/use-stick-to-bottom";
@@ -183,14 +184,17 @@ export function HistoryPane({
             aria-label={t("history.selectItem", { title })}
           />
         )}
-        <BubbleCard
-          item={item}
-          clamp
-          pressable
-          selected={selecting && picked}
-          onTap={() => (selecting ? toggleSelected(item.id) : onOpen(item))}
-          onLongPress={() => (selecting ? picked || toggleSelected(item.id) : startSelect(item))}
-        />
+        <div className="flex min-w-0 flex-col items-start">
+          <BubbleCard
+            item={item}
+            clamp
+            pressable
+            selected={selecting && picked}
+            onTap={() => (selecting ? toggleSelected(item.id) : onOpen(item))}
+            onLongPress={() => (selecting ? picked || toggleSelected(item.id) : startSelect(item))}
+          />
+          {!selecting && item.kind === "text" && item.text && <CopyText text={item.text} className="mt-0.5" />}
+        </div>
       </li>
     );
   }

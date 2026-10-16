@@ -1,4 +1,4 @@
-import { Plus, Send } from "lucide-react";
+import { ClipboardPaste, Plus, Send } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,21 +12,26 @@ function onScreen(node: HTMLElement | null): boolean {
   return node !== null && node.isConnected && node.getClientRects().length > 0;
 }
 
-function clipboardImages(data: DataTransfer | null): File[] {
-  if (!data) return [];
-  const images: File[] = [];
+function pasteMark(): string {
   const stamp = new Date();
   const pad = (value: number) => String(value).padStart(2, "0");
-  const mark = `${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}-${pad(stamp.getHours())}${pad(stamp.getMinutes())}${pad(stamp.getSeconds())}`;
+  return `${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}-${pad(stamp.getHours())}${pad(stamp.getMinutes())}${pad(stamp.getSeconds())}`;
+}
+
+/** A pasted image with a dated name; null for anything else. */
+function pastedImage(blob: Blob | null, mark: string, n: number): File | null {
+  if (!blob || !blob.type.startsWith("image/")) return null;
+  const subtype = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg").split("+")[0] || "png";
+  return new File([blob], t("composer.pasteName", { mark, n, ext: subtype }), { type: blob.type, lastModified: Date.now() });
+}
+
+function clipboardImages(data: DataTransfer | null): File[] {
+  if (!data) return [];
+  const mark = pasteMark();
+  const images: File[] = [];
   const take = (file: File | null) => {
-    if (!file || !file.type.startsWith("image/")) return;
-    const subtype = (file.type.split("/")[1] || "png").replace("jpeg", "jpg").split("+")[0] || "png";
-    images.push(
-      new File([file], t("composer.pasteName", { mark, n: images.length + 1, ext: subtype }), {
-        type: file.type,
-        lastModified: Date.now(),
-      }),
-    );
+    const image = pastedImage(file, mark, images.length + 1);
+    if (image) images.push(image);
   };
   if (data.items?.length) {
     for (const item of data.items) {
@@ -37,6 +42,30 @@ function clipboardImages(data: DataTransfer | null): File[] {
     for (const file of data.files) take(file);
   }
   return images;
+}
+
+/** Images (where the browser can read them) and text on the clipboard. Throws when access is refused. */
+async function readClipboard(): Promise<{ text: string; files: File[] }> {
+  if (navigator.clipboard?.read) {
+    try {
+      const mark = pasteMark();
+      const files: File[] = [];
+      let text = "";
+      for (const item of await navigator.clipboard.read()) {
+        const image = item.types.find((type) => type.startsWith("image/"));
+        if (image) {
+          const file = pastedImage(await item.getType(image), mark, files.length + 1);
+          if (file) files.push(file);
+        } else if (item.types.includes("text/plain")) {
+          text += await (await item.getType("text/plain")).text();
+        }
+      }
+      return { text: text.trim(), files };
+    } catch {
+      // Some browsers refuse read() but still allow readText().
+    }
+  }
+  return { text: (await navigator.clipboard.readText()).trim(), files: [] };
 }
 
 export function Composer({
@@ -60,7 +89,7 @@ export function Composer({
   /** Direct mode keeps the fields and does not offer a cloud send. */
   hideSend?: boolean;
   /** LAN session send. Leaves the draft in place and does not touch cloud history. */
-  directSend?: { label: string; disabled?: boolean; hint?: string; onSend: () => void };
+  directSend?: { label: string; disabled?: boolean; hint?: string; onSend: (content?: { text: string; files: File[] }) => void };
 }) {
   const send = useDropStore((state) => state.send);
   const jobs = useDropStore((state) => state.jobs);
@@ -105,29 +134,54 @@ export function Composer({
       return;
     }
     if (hideSend || busy) return;
-    if (!connected) {
-      toast.error(note || t("composer.needDrive"));
-      openSettings();
-      return;
-    }
     const trimmed = text.trim();
-    if (!trimmed && files.length === 0) {
+    if (connected && !trimmed && files.length === 0) {
       toast.message(t("composer.needContent"));
       areaRef.current?.focus();
       return;
     }
-    const result = await send(trimmed ? [trimmed] : [], files, scope);
-    if (result.sent > 0) {
-      const failedIndexes = new Set(result.failedFileIndexes ?? []);
-      const remaining = files.filter((_, index) => failedIndexes.has(index));
-      if (result.textSent !== false) onText("");
-      onFiles(remaining);
-      setAgain(remaining.length === 0 && result.textSent !== false);
-      if (result.failed === 0) toast.success(result.message);
-      else toast.warning(result.message);
+    const remaining = await sendCloud(trimmed, files);
+    if (!remaining) return;
+    if (remaining.textSent) onText("");
+    onFiles(remaining.files);
+    setAgain(remaining.files.length === 0 && remaining.textSent);
+  }
+
+  /** Cloud send of the given content; returns what is left of it, or null when nothing went out. */
+  async function sendCloud(trimmed: string, list: File[]) {
+    if (!connected) {
+      toast.error(note || t("composer.needDrive"));
+      openSettings();
+      return null;
+    }
+    const result = await send(trimmed ? [trimmed] : [], list, scope);
+    if (result.sent === 0) {
+      toast.error(result.message);
+      return null;
+    }
+    const failedIndexes = new Set(result.failedFileIndexes ?? []);
+    if (result.failed === 0) toast.success(result.message);
+    else toast.warning(result.message);
+    return { textSent: result.textSent !== false, files: list.filter((_, index) => failedIndexes.has(index)) };
+  }
+
+  async function pasteAndSend() {
+    let content: { text: string; files: File[] };
+    try {
+      content = await readClipboard();
+    } catch {
+      toast.error(t("composer.pasteDenied"));
       return;
     }
-    toast.error(result.message);
+    if (!content.text && content.files.length === 0) {
+      toast.message(t("composer.pasteEmpty"));
+      return;
+    }
+    if (directSend) {
+      if (!directSend.disabled) directSend.onSend(content);
+      return;
+    }
+    if (!busy) await sendCloud(content.text, content.files);
   }
 
   sendRef.current = () => {
@@ -250,6 +304,20 @@ export function Composer({
               </button>
             )}
             {directSend?.hint && <span className="truncate text-xs text-muted-foreground">{directSend.hint}</span>}
+            {(directSend ? !directSend.disabled : !hideSend) && (
+              <Button
+                variant="outline"
+                size={compact ? "icon" : directSend ? "md" : "lg"}
+                className={compact ? "size-9 rounded-full" : "w-auto"}
+                aria-label={t("composer.pasteSend")}
+                title={t("composer.pasteSend")}
+                disabled={busy && !directSend}
+                onClick={() => void pasteAndSend()}
+              >
+                <ClipboardPaste className="size-4" />
+                {!compact && t("composer.pasteSend")}
+              </Button>
+            )}
             {directSend ? (
               <Button type="submit" size={compact ? "md" : "lg"} className="w-auto" disabled={directSend.disabled}>
                 <Send className="size-4" />

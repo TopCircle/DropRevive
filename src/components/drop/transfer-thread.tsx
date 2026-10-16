@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { CopyText } from "@/components/drop/copy-text";
 import { formatBytes, formatWhen } from "@/lib/drop/format";
 import { useI18n } from "@/lib/i18n";
 import type { BatchStatus, NoticeTone, TimelineBatch, TimelineEntry } from "@/lib/transfer/timeline";
@@ -94,7 +95,10 @@ function BatchCard({
         {batchLabel(entry.status, t)}
       </p>
       {entry.text ? (
-        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{entry.text}</p>
+        <>
+          <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{entry.text}</p>
+          {entry.direction === "in" && <CopyText text={entry.text} className="mt-1 -ml-2" />}
+        </>
       ) : (
         entry.direction === "in" &&
         entry.textBytes > 0 && <p className="mt-2 text-sm text-muted-foreground">{t("transfer.textPending", { size: formatBytes(entry.textBytes) })}</p>

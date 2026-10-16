@@ -75,7 +75,7 @@ export function TransferPanel({
   onAlsoCloud?: () => void;
   onClearDraft?: () => void;
   alsoCloudLabel?: string;
-  composer: ReactElement<{ hideSend?: boolean; directSend?: { label: string; disabled?: boolean; hint?: string; onSend: () => void } }>;
+  composer: ReactElement<{ hideSend?: boolean; directSend?: { label: string; disabled?: boolean; hint?: string; onSend: (content?: { text: string; files: File[] }) => void } }>;
 }) {
   const { t } = useI18n();
   // The session (room, link, timeline) belongs to the tab, not to this panel: see lan-session-store.
@@ -356,8 +356,10 @@ export function TransferPanel({
     session.disconnect();
   }
 
-  function offerCurrent() {
-    if (session.offer(text, files)) onClearDraft?.();
+  /** Sends the draft, or pasted content without touching the draft. */
+  function offerCurrent(content?: { text: string; files: File[] }) {
+    if (content) session.offer(content.text, content.files);
+    else if (session.offer(text, files)) onClearDraft?.();
   }
 
   async function copyCode() {
