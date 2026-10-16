@@ -107,10 +107,7 @@ export function watchPeer<T>(peer: T): T {
   const pc = peer as unknown as Watched;
   const mappings: Mapping[] = [];
   dlog("peer created");
-  if (!probed) {
-    probed = true;
-    void runNetworkTest();
-  }
+  if (!probed) void runNetworkTest();
   pc.addEventListener("icecandidate", (event) => {
     const ice = event as unknown as IceEvent;
     if (!ice.candidate) {
@@ -181,6 +178,7 @@ export function logSignal(direction: "sent" | "recv", payload: SignalPayload): v
 /** One throwaway connection per STUN server, then one with all of them for the NAT hint. */
 export async function runNetworkTest(): Promise<void> {
   if (!DEBUG) return;
+  probed = true;
   dlog(`network test: ${ICE_SERVERS.length} STUN servers, ${PROBE_MS / 1000}s each`);
   const results = await Promise.all(ICE_SERVERS.map((server) => probe([server])));
   results.forEach((mappings, index) => {
