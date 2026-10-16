@@ -6,6 +6,7 @@ import { lostSocketNeedsFail } from "./panel-flow.ts";
 import { encodeSignal, type ManifestFile, type ServerSignal, type SignalPayload } from "./protocol.ts";
 import { decideLinkFault, type LinkFault } from "./recover.ts";
 import { createRecovery } from "./recovery.ts";
+import { dlog, logSignal, watchPeer } from "./diagnostics.ts";
 import { visibleNudge } from "./session-state.ts";
 import { browserPeer, closedSession, connectSession, type DataChannelLike, type PeerLike, type Session } from "./session.ts";
 
@@ -293,6 +294,7 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     const link = linkRef.current;
     if (!link.socket || link.socket.readyState !== WebSocket.OPEN) return;
     link.socket.send(encodeSignal({ type: "signal", token: link.token, payload }));
+    logSignal("sent", payload);
   }
 
   function reconnectSocket(): void {
@@ -427,6 +429,7 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
   function takeSignal(payload: SignalPayload): void {
     const link = linkRef.current;
     if (!link.alive || link.finished || link.quiet) return;
+    logSignal("recv", payload);
     if (!link.session) {
       link.early.push(payload);
       return;
@@ -442,7 +445,7 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     link.control = "ready";
     link.session = connectSession({
       role,
-      createPeer: browserPeer,
+      createPeer: (config) => watchPeer(browserPeer(config)),
       sendSignal: postSignal,
       isSocketOpen: () => linkRef.current.socket?.readyState === WebSocket.OPEN,
       onPeer(peer) {
@@ -502,9 +505,11 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     link.role = role;
     link.roomCode = roomCode;
     link.token = token;
+    dlog(`socket open requested as ${role === "host" ? "creator" : "joiner"} room ${roomCode}`);
     const socket = new WebSocket(socketUrl(roomCode, token));
     link.socket = socket;
     socket.onopen = () => {
+      dlog("socket open");
       reconnectTries = 0;
       const pending = linkRef.current.session;
       if (pending) void pending.then((session) => session.flush());
@@ -512,6 +517,7 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     };
     socket.onmessage = (event) => {
       const message = parseServer(String(event.data));
+      if (message && message.type !== "signal") dlog(`server ${message.type}`);
       if (message) hooksRef.current.onServer(message);
     };
     socket.onerror = () => applyFault("ws-error");

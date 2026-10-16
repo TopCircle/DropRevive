@@ -4,6 +4,7 @@ import { Cloud, Inbox, PanelLeft, Plus, Radio, RefreshCw, Search, Settings, Tras
 import { type KeyboardEvent, type ReactNode, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SendMode } from "@/components/drop/send-mode";
+import { CopyText } from "@/components/drop/copy-text";
 import { LanBadge } from "@/components/drop/lan-badge";
 import { useLanOpenRequests } from "@/components/drop/lan-session-store";
 import { PreviewStage } from "@/components/drop/preview-dialog";
@@ -812,9 +813,12 @@ function Bubble({
           });
         }}
       />
-      <div className="flex h-8 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-        <FolderPicker itemId={item.id} className="h-7" />
-        <DeleteItem itemId={item.id} className="h-7 min-w-7" />
+      <div className="flex min-h-8 flex-wrap items-center gap-1">
+        {item.kind === "text" && item.text && <CopyText text={item.text} />}
+        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+          <FolderPicker itemId={item.id} className="h-7" />
+          <DeleteItem itemId={item.id} className="h-7 min-w-7" />
+        </div>
       </div>
     </div>
   );
