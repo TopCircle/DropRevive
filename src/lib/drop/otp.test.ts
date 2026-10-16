@@ -31,3 +31,11 @@ test("text without a keyword or a code token is not a code", () => {
   assert.equal(extractCode("the code is great"), null);
   assert.equal(extractCode(`code 1234 ${"x".repeat(200)}`), null);
 });
+
+test("keywords only count as whole words", () => {
+  assert.equal(extractCode("shopping list: 2 eggs, 1234 Main St"), null);
+  assert.equal(extractCode("scan the barcode 5012345"), null);
+  assert.equal(extractCode("decode step 2048 done"), null);
+  assert.equal(extractCode("PIN: 4821"), "4821");
+  assert.equal(extractCode("code是 8841"), "8841");
+});

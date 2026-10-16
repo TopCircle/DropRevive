@@ -1,5 +1,6 @@
 const TOKEN = /(?<![A-Za-z0-9])[A-Za-z0-9]{4,8}(?![A-Za-z0-9])/g;
-const KEYWORD = /验证码|校验码|动态码|确认码|code|otp|passcode|pin/i;
+// English keywords as whole words, so "barcode", "shopping" or "decode" do not count.
+const KEYWORD = /验证码|校验码|动态码|确认码|\b(?:code|otp|passcode|pin)\b/i;
 
 /**
  * The one-time code in a received text, or null. Either the whole text is a code
