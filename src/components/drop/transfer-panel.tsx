@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { TransferThread, type ThreadFile } from "@/components/drop/transfer-thread";
 import { linkChipClass } from "@/components/drop/link-chip";
+import { P2pDebug } from "@/components/drop/p2p-debug";
 import { lanSession, useLan } from "@/components/drop/lan-session-store";
 import { useI18n } from "@/lib/i18n";
 import { isRoomCode } from "@/lib/transfer/code";
@@ -507,6 +508,7 @@ export function TransferPanel({
             )}
           </div>
         )}
+        <P2pDebug />
         <div className={scanning ? `scan-stage flex flex-1 items-center justify-center ${compact ? "min-h-[12rem]" : "min-h-0"}` : "contents"}>
           <div className={scanning ? "relative flex" : "contents"}>
             <video
