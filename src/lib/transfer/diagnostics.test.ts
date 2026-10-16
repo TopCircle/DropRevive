@@ -22,6 +22,16 @@ test("different public ports for the same local port is symmetric", () => {
   );
 });
 
+test("the same port on two public IPs (multi-exit NAT) is symmetric", () => {
+  assert.match(
+    natHint([
+      { url: "stun:a", address: "203.0.113.7", port: 40000, base: 51000 },
+      { url: "stun:b", address: "198.51.100.9", port: 40000, base: 51000 },
+    ]),
+    /likely symmetric NAT/,
+  );
+});
+
 test("different local ports are not compared", () => {
   assert.equal(
     natHint([

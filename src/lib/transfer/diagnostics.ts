@@ -69,15 +69,15 @@ function describe(candidate: Candidate): string {
   return `${candidate.type} ${candidate.protocol} ${candidate.address}:${candidate.port}${base}`;
 }
 
-export type Mapping = { url: string; port: number; base: number | null };
+export type Mapping = { url: string; port: number; base: number | null; address?: string };
 
-/** Same local port seen at different public ports by different servers = per-destination mapping. */
+/** Same local port seen at different public addresses or ports by different servers = per-destination mapping. */
 export function natHint(mappings: Mapping[]): string {
   if (mappings.length === 0) return "no srflx: no STUN server answered";
-  const ports = new Map<string, Set<number>>();
+  const ports = new Map<string, Set<string>>();
   for (const mapping of mappings) {
     const key = String(mapping.base ?? "?");
-    ports.set(key, (ports.get(key) ?? new Set()).add(mapping.port));
+    ports.set(key, (ports.get(key) ?? new Set()).add(`${mapping.address ?? ""}:${mapping.port}`));
   }
   for (const seen of ports.values()) {
     if (seen.size > 1) return "mapping varies per destination (likely symmetric NAT); STUN alone may not traverse";
@@ -117,7 +117,7 @@ export function watchPeer<T>(peer: T): T {
     const parsed = parseCandidate(ice.candidate.candidate);
     if (!parsed) return;
     const url = candidateUrl(ice);
-    if (parsed.type === "srflx") mappings.push({ url, port: parsed.port, base: parsed.relatedPort });
+    if (parsed.type === "srflx") mappings.push({ url, address: parsed.address, port: parsed.port, base: parsed.relatedPort });
     dlog(`local ${describe(parsed)}${url ? ` via ${url}` : ""}`);
   });
   pc.addEventListener("icegatheringstatechange", () => dlog(`iceGathering ${pc.iceGatheringState}`));
