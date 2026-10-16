@@ -6,6 +6,18 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
+### 中文
+- **粘贴并发送**：输入框旁新增按钮，一键读取剪贴板里的文字或图片并直接发出，云端收件箱和点对点直传都能用；点对点未连通时不显示。iPhone 的 Safari 每次都会弹出「粘贴」确认，这是系统限制。
+- **收到的文字一键复制**：文字消息上直接显示「复制」；识别到验证码时显示「复制验证码 551203」，只复制验证码本身。单独一串 4–8 位字母数字（如「2026」）也会被当作验证码。
+- **点对点诊断模式**：网址加 `?debug=1` 后，直传面板会显示连接日志、各 STUN 服务器连通情况和 NAT 类型提示，可「运行网络测试」并一键复制日志；不加参数时不显示、也不运行。
+- 已知限制：两端之一处于对称 NAT（部分手机流量、多出口的公司网络）时，只靠 STUN 可能连不上；目前没有中继，可改用同一个 Wi-Fi 或云端收件箱。
+
+### English
+- **Paste & send**: a new button next to the composer reads text or an image from the clipboard and sends it at once, to the cloud inbox or over P2P (hidden while P2P is not connected). Safari on iPhone asks you to confirm the paste every time; that is a system limit.
+- **One-tap copy on received text**: text messages show a Copy button; when a one-time code is found it shows "Copy code 551203" and copies just the code. A bare 4–8 character letters-and-digits string (like "2026") also counts as a code.
+- **P2P diagnostics**: add `?debug=1` to the URL to see the connection log, per-STUN-server reachability and a NAT hint in the transfer panel, with "Run network test" and one-tap "Copy log"; without the flag nothing is shown or run.
+- Known limit: when either side is behind a symmetric NAT (some mobile data, multi-exit company networks), STUN alone may not connect; there is still no relay, so use the same Wi-Fi or the cloud inbox.
+
 ## [1.1.0] - 2026-10-14
 
 ### 中文
