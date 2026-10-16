@@ -110,6 +110,8 @@ export function Composer({
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const sendRef = useRef<() => void>(() => undefined);
+  const pastingRef = useRef(false);
+  const [pasting, setPasting] = useState(false);
 
   function addFiles(list: FileList | File[]) {
     const next = [...files];
@@ -166,22 +168,37 @@ export function Composer({
   }
 
   async function pasteAndSend() {
-    let content: { text: string; files: File[] };
+    // One paste at a time: a second tap while the clipboard prompt or the upload is pending would send twice.
+    if (pastingRef.current) return;
+    if (!directSend && !connected) {
+      // Say so before the clipboard prompt, not after it.
+      toast.error(note || t("composer.needDrive"));
+      openSettings();
+      return;
+    }
+    pastingRef.current = true;
+    setPasting(true);
     try {
-      content = await readClipboard();
-    } catch {
-      toast.error(t("composer.pasteDenied"));
-      return;
+      let content: { text: string; files: File[] };
+      try {
+        content = await readClipboard();
+      } catch {
+        toast.error(t("composer.pasteDenied"));
+        return;
+      }
+      if (!content.text && content.files.length === 0) {
+        toast.message(t("composer.pasteEmpty"));
+        return;
+      }
+      if (directSend) {
+        if (!directSend.disabled) directSend.onSend(content);
+        return;
+      }
+      if (!busy) await sendCloud(content.text, content.files);
+    } finally {
+      pastingRef.current = false;
+      setPasting(false);
     }
-    if (!content.text && content.files.length === 0) {
-      toast.message(t("composer.pasteEmpty"));
-      return;
-    }
-    if (directSend) {
-      if (!directSend.disabled) directSend.onSend(content);
-      return;
-    }
-    if (!busy) await sendCloud(content.text, content.files);
   }
 
   sendRef.current = () => {
@@ -311,7 +328,7 @@ export function Composer({
                 className={compact ? "size-9 rounded-full" : "w-auto"}
                 aria-label={t("composer.pasteSend")}
                 title={t("composer.pasteSend")}
-                disabled={busy && !directSend}
+                disabled={pasting || (busy && !directSend)}
                 onClick={() => void pasteAndSend()}
               >
                 <ClipboardPaste className="size-4" />
