@@ -186,15 +186,15 @@ export async function runNetworkTest(): Promise<void> {
   results.forEach((mappings, index) => {
     const url = String(ICE_SERVERS[index].urls);
     const first = mappings[0];
-    dlog(first ? `probe ${url}: ok ${first.address}:${first.port}` : `probe ${url}: timeout`);
+    dlog(first ? `probe ${url}: ok ${first.address}:${first.port}` : `probe ${url}: timeout (no srflx; ${mappings.hosts} host candidates)`);
   });
   const combined = await probe(ICE_SERVERS);
   for (const mapping of combined) dlog(`all servers: srflx ${mapping.address}:${mapping.port} base:${mapping.base ?? "?"}${mapping.url ? ` via ${mapping.url}` : ""}`);
   dlog(`nat hint: ${natHint(combined)}`);
 }
 
-async function probe(iceServers: RTCIceServer[]): Promise<Array<Mapping & { address: string }>> {
-  const found: Array<Mapping & { address: string }> = [];
+async function probe(iceServers: RTCIceServer[]): Promise<Array<Mapping & { address: string }> & { hosts: number }> {
+  const found = Object.assign([] as Array<Mapping & { address: string }>, { hosts: 0 });
   let pc: RTCPeerConnection | null = null;
   try {
     pc = new RTCPeerConnection({ iceServers });
@@ -209,6 +209,7 @@ async function probe(iceServers: RTCIceServer[]): Promise<Array<Mapping & { addr
           return;
         }
         const parsed = parseCandidate(ice.candidate.candidate);
+        if (parsed?.type === "host") found.hosts += 1;
         if (parsed?.type === "srflx") found.push({ url: candidateUrl(ice), address: parsed.address, port: parsed.port, base: parsed.relatedPort });
       });
     });
