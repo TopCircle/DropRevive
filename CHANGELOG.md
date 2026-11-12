@@ -6,6 +6,12 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
+### 中文
+- 设置旁边的 Telegram 图标右侧新增 GitHub 图标，点开即可进入项目仓库。
+
+### English
+- A GitHub icon now sits to the right of the Telegram icon next to Settings and opens the project repository.
+
 ## [1.2.0] - 2026-10-16
 
 ### 中文

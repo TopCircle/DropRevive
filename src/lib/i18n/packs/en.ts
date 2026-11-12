@@ -27,6 +27,8 @@ export const en: LanguagePack = {
     "nav.settingsShort": "Settings",
     "nav.telegram": "Join the Telegram group",
     "nav.telegramShort": "Telegram",
+    "nav.github": "Open the GitHub repository",
+    "nav.githubShort": "GitHub",
     "nav.search": "Search",
     "nav.install": "Install",
     "nav.connectDrive": "Connect a drive",
