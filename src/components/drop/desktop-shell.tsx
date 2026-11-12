@@ -21,8 +21,9 @@ import type { DropRecord, ProviderId, Scope } from "@/lib/drop/types";
 import { modeForTransferSearch } from "@/lib/transfer/panel-flow";
 import { useScopeFallback } from "@/components/drop/use-scope-fallback";
 import { ALL_SCOPE, scopeLabel } from "@/components/drop/scope";
+import { GitHubIcon } from "@/components/drop/github-icon";
 import { TelegramIcon } from "@/components/drop/telegram-icon";
-import { TELEGRAM_URL } from "@/lib/links";
+import { GITHUB_URL, TELEGRAM_URL } from "@/lib/links";
 import { oldestFirst, ownNewestKey, useStickToBottom } from "@/components/drop/use-stick-to-bottom";
 
 export type HomeSurface = "inbox" | "lan";
@@ -406,6 +407,11 @@ export function DesktopShell({
           <Button variant="ghost" size="icon" asChild>
             <a href={TELEGRAM_URL} target="_blank" rel="noopener noreferrer" aria-label={t("nav.telegram")} title={t("nav.telegram")}>
               <TelegramIcon className="size-5" />
+            </a>
+          </Button>
+          <Button variant="ghost" size="icon" asChild>
+            <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label={t("nav.github")} title={t("nav.github")}>
+              <GitHubIcon className="size-5" />
             </a>
           </Button>
         </div>

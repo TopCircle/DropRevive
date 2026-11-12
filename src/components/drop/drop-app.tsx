@@ -1,6 +1,7 @@
 import { Download, Menu, RefreshCw, Search, Settings, WifiOff, X } from "lucide-react";
+import { GitHubIcon } from "@/components/drop/github-icon";
 import { TelegramIcon } from "@/components/drop/telegram-icon";
-import { TELEGRAM_URL } from "@/lib/links";
+import { GITHUB_URL, TELEGRAM_URL } from "@/lib/links";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -410,6 +411,12 @@ export function DropApp() {
                   <a href={TELEGRAM_URL} target="_blank" rel="noopener noreferrer" aria-label={t("nav.telegram")} title={t("nav.telegram")}>
                     <TelegramIcon className="size-4" />
                     {t("nav.telegramShort")}
+                  </a>
+                </Button>
+                <Button variant="ghost" size="sm" className="justify-start px-2" asChild>
+                  <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" aria-label={t("nav.github")} title={t("nav.github")}>
+                    <GitHubIcon className="size-4" />
+                    {t("nav.githubShort")}
                   </a>
                 </Button>
                 {installEvent && (

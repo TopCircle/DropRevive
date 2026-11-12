@@ -21,6 +21,8 @@ export const zhMessages = {
   "nav.settingsShort": "设置",
   "nav.telegram": "加入 Telegram 群组",
   "nav.telegramShort": "Telegram",
+  "nav.github": "打开 GitHub 仓库",
+  "nav.githubShort": "GitHub",
   "nav.search": "搜索",
   "nav.install": "安装",
   "nav.connectDrive": "连接云盘",

@@ -8,9 +8,11 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 
 ### 中文
 - **云盘大文件上传更稳**：Google Drive（>5MB）和 OneDrive（>4MB）按约 8 MiB 分块顺序上传，失败后向服务端询问进度并从断点续传；只重试网络错误、5xx 和 429（最多 3 次，指数退避），单片有超时和无进度卡死检测。进度条按分块内实际上传量平滑前进，重传时不会退回 0。Google 大文件分块和 OneDrive 简单上传在 401 时会刷新令牌再试一次。用户可见的大小上限不变。
+- 设置旁边的 Telegram 图标右侧新增 GitHub 图标，点开即可进入项目仓库。
 
 ### English
 - **More reliable cloud uploads for large files**: Google Drive (>5 MB) and OneDrive (>4 MB) upload in sequential ~8 MiB chunks, query the server for progress after a failure, and resume from that offset. Only network errors, 5xx and 429 are retried (up to three attempts, exponential backoff), with a per-chunk timeout and stall watchdog. The progress bar follows in-chunk bytes and does not jump back to 0 on a retry. A 401 renews the access token and retries once on Google large-file chunks and OneDrive simple uploads. User-visible size limits are unchanged.
+- A GitHub icon now sits to the right of the Telegram icon next to Settings and opens the project repository.
 
 ## [1.2.0] - 2026-10-16
 
