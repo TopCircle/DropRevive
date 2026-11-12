@@ -6,15 +6,17 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
-以下条目已于 2026-11-12 部署到正式站，在下一次编号发布前仍列在此处。 / The items below were deployed to the production site on 2026-11-12; they stay here until the next numbered release.
+已于 2026-11-12 部署到正式站。 / Deployed to the production site on 2026-11-12.
 
 ### 中文
-- **云盘大文件上传更稳**：Google Drive（>5MB）和 OneDrive（>4MB）按约 8 MiB 分块顺序上传，失败后向服务端询问进度并从断点续传；只重试网络错误、5xx 和 429（最多 3 次，指数退避），单片有超时和无进度卡死检测。进度条按分块内实际上传量平滑前进，重传时不会退回 0。Google 大文件分块和 OneDrive 简单上传在 401 时会刷新令牌再试一次。用户可见的大小上限不变。刷新页面或取消后不能从断点恢复。2026-11-12 已部署正式站。
-- 设置旁边的 Telegram 图标右侧新增 GitHub 图标，点开即可进入项目仓库。2026-11-12 已部署正式站。
+- **云盘大文件上传更稳**：Google Drive（>5MB）和 OneDrive（>4MB）按约 8 MiB 分块顺序上传，失败后向服务端询问进度并从断点续传；只重试网络错误、5xx 和 429（最多 3 次，指数退避），单片有超时和无进度卡死检测。进度条按分块内实际上传量平滑前进，重传时不会退回 0。Google 大文件分块和 OneDrive 简单上传在 401 时会刷新令牌再试一次。用户可见的大小上限不变。刷新页面或取消后不能从断点恢复。云盘下载仍是整文件进入内存。
+- 设置旁边的 Telegram 图标右侧新增 GitHub 图标，点开即可进入项目仓库。
+- 文档已对齐上述行为，并补充正式站部署需在命令中内联 Secrets Store 变量、测试站部署需 `STAGING_WORKER`，以及实测的 lint 与测试数量。
 
 ### English
-- **More reliable cloud uploads for large files**: Google Drive (>5 MB) and OneDrive (>4 MB) upload in sequential ~8 MiB chunks, query the server for progress after a failure, and resume from that offset. Only network errors, 5xx and 429 are retried (up to three attempts, exponential backoff), with a per-chunk timeout and stall watchdog. The progress bar follows in-chunk bytes and does not jump back to 0 on a retry. A 401 renews the access token and retries once on Google large-file chunks and OneDrive simple uploads. User-visible size limits are unchanged. An upload does not resume after a page refresh or a cancel. Deployed to the production site on 2026-11-12.
-- A GitHub icon now sits to the right of the Telegram icon next to Settings and opens the project repository. Deployed to the production site on 2026-11-12.
+- **More reliable cloud uploads for large files**: Google Drive (>5 MB) and OneDrive (>4 MB) upload in sequential ~8 MiB chunks, query the server for progress after a failure, and resume from that offset. Only network errors, 5xx and 429 are retried (up to three attempts, exponential backoff), with a per-chunk timeout and stall watchdog. The progress bar follows in-chunk bytes and does not jump back to 0 on a retry. A 401 renews the access token and retries once on Google large-file chunks and OneDrive simple uploads. User-visible size limits are unchanged. An upload does not resume after a page refresh or a cancel. Cloud downloads still load the whole file into memory.
+- A GitHub icon now sits to the right of the Telegram icon next to Settings and opens the project repository.
+- Docs now match the above behaviour, and describe that a production deploy must inline the Secrets Store variables on the command, that a staging deploy needs `STAGING_WORKER`, and the measured lint and test counts.
 
 ## [1.2.0] - 2026-10-16
 
