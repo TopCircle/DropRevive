@@ -193,6 +193,8 @@ flowchart TB
 
 同步运行期间到来的同步请求会共用这一轮，并且只再排一轮。列表中途失败不会清掉已有的本地历史。store 有单元测试（`store.test.ts`、`store.sync.test.ts`），用假的网盘客户端（`store.test-fakes.ts`）。
 
+云端上传由浏览器直接发到 Google Drive 或 Microsoft Graph。不超过 5 MB（Google）或 4 MB（OneDrive）的文件一次传完；更大的文件先开可恢复会话，再按约 8 MiB、符合各接口倍数要求的分块顺序 PUT。某一片失败时向服务端查询已收进度并从断点续传。只重试网络错误、5xx 和 429（最多 3 次），并有单次超时和无进度卡死检测。401 会刷新访问令牌再试一次，Google 大文件分块和 OneDrive 简单上传也包括在内。
+
 ## 6. 点对点直传：HTTP 入口和页面内扫码器
 
 `server/transfer-http.ts` 是点对点直传配对唯一的 HTTP 入口。它检查请求来源（先要求与请求同主机，再按 `ALLOWED_ORIGINS`，不设时按同源）；声明的 `Content-Length` 超过上限时，读取前就拒绝；请求体按流读取，超过上限立即取消（分块或少报长度的请求体不会被整个缓冲）；解析出的 JSON 还要校验：必须是普通对象，`deviceName` 和 `code` 必须是符合格式的字符串，多余的未知字段忽略。超大请求返回 413，格式不对返回 400，这条路径不应出现 500。
