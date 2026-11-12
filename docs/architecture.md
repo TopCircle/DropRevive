@@ -193,6 +193,8 @@ flowchart TB
 
 Sync requests that arrive during a run share it and queue exactly one more pass. A listing that fails part-way never wipes existing local history. The store has unit tests (`store.test.ts`, `store.sync.test.ts`) built on fake drive clients (`store.test-fakes.ts`).
 
+Cloud uploads go from the browser straight to Google Drive or Microsoft Graph. Files at or under 5 MB (Google) or 4 MB (OneDrive) use a single request. Larger files open a resumable session and are PUT in sequential chunks (about 8 MiB, aligned to each API's required multiple); a failed chunk is queried for server progress and resumed. Retries cover network errors, 5xx and 429 only (up to three attempts, with a per-request timeout and stall watchdog). A 401 renews the access token once and retries, including Google large-file chunks and OneDrive simple uploads.
+
 ## 6. P2P Transfer: HTTP entry and the in-page scanner
 
 `server/transfer-http.ts` is the only HTTP entry for P2P pairing. It checks the request origin (same host as the request, then `ALLOWED_ORIGINS` or, when unset, same-origin), rejects a declared `Content-Length` over the cap before reading, reads the body as a stream and cancels it once it passes the cap (so chunked or under-declared bodies are never buffered whole), and validates the parsed JSON: it must be a plain object, `deviceName` and `code` must be strings of the allowed shape, and unknown extra keys are ignored. Oversized requests get 413, malformed ones 400, and nothing in this path should produce a 500.
