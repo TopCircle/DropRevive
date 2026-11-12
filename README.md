@@ -22,7 +22,7 @@ When both devices have DropRevive open, use temporary direct transfer (works bes
 
 **Scanning the QR code with a phone.** The in-page scanner uses the browser's `BarcodeDetector` when it exists and falls back to a bundled jsQR decoder (loaded on demand) when it is missing, throws, or stays silent for a few seconds. `BarcodeDetector` can be present yet useless, for example in Android browsers without Google services, which is why the fallback does not depend on it being absent. The camera asks for 1280x720 at 30 fps, switches on continuous autofocus where the browser supports it, offers a torch button when the camera has one, and tap-to-focus where supported. The viewfinder fills the panel width. Problems (permission denied, no camera, a QR from another site, nothing read after 10 seconds) show as short toasts, never as text over the picture. You can always type the 8-character code instead. To see what the scanner is doing on a device, open the site with `?scandebug=1` (see [Contributing](CONTRIBUTING.md)).
 
-Pairing needs access to the site. File bytes do not go through the Worker. The link is direct P2P on most networks: public STUN servers (Cloudflare, Google, plus bilibili and hitv for mainland China) only help each device learn its public IP and never see file content. There is no TURN and no server relay, so some networks (carrier-grade NAT, corporate or guest Wi-Fi) cannot connect; try the same Wi-Fi or switch to cloud. There is no LAN auto-discovery. Max 32 MiB per file, 64 MiB per batch, 32 KiB for text. Save each received file with a tap when done.
+Pairing needs access to the site. File bytes do not go through the Worker. The link is direct P2P on most networks: public STUN servers (Cloudflare, Google, plus bilibili and hitv for mainland China) only help each device learn its public IP and never see file content. There is no TURN and no server relay, so some networks (carrier-grade NAT, corporate or guest Wi-Fi) cannot connect; try the same Wi-Fi or switch to cloud. There is no LAN auto-discovery. Limits: 32 MiB per file, 64 MiB per batch, at most 8 files, 32 KiB for text. Save each received file with a tap when done.
 
 The session belongs to the browser tab, not the P2P Transfer page: you can switch to the inbox, a drive or settings and come back still connected. While the P2P Transfer page is closed, the **P2P Transfer** nav item shows a dot when linked and a count of offers and unsaved files, and toasts announce new offers and received files; offers always wait for you to accept. The session ends only when you tap **Disconnect**, close the tab, or the other side leaves:
 
@@ -33,12 +33,12 @@ The session belongs to the browser tab, not the P2P Transfer page: you can switc
 
 What works today:
 
-- Send text and files; download, preview, and filter from any connected drive.
+- Send text and files; download, preview, and filter from any connected drive. Cloud uploads over 5 MB (Google Drive) or 4 MB (OneDrive) go in sequential ~8 MiB chunks and can resume a failed chunk in the same page session; a page refresh or a cancelled upload starts over. Cloud downloads still load the whole file into memory.
 - Background sync and manual "Sync now". Incomplete listing does not wipe existing local history.
 - Chinese and English; light / dark / system theme; device name.
 - Install as a PWA. The installed icon and the browser tab icon are two different assets.
 - Offline viewing of items already synced on this device.
-- A Telegram icon next to Settings (and a link on the privacy page) opens the project's Telegram group.
+- A Telegram icon next to Settings (and a link on the privacy page) opens the project's Telegram group. A GitHub icon beside it opens the project repository (<https://github.com/TopCircle/DropRevive>); the privacy page is unchanged.
 
 New content while offline is not queued. Drops fail immediately and are not written to local history. Deletes likewise need the network. Clearing local cache leaves cloud files on the drive; deleting an item in the app removes the matching drive files.
 
@@ -104,7 +104,7 @@ The list is also in [`.dev.vars.example`](.dev.vars.example), a commented templa
 | `npm run build` | Build the public profile into `.output/` (Worker `droprevive`, `workers.dev`, no route) |
 | `npm run deploy` | Builds, checks the build is the public profile (workers.dev on, no route, not `dropreceive`), then `wrangler deploy`. This is what the button runs; it builds first, so it works even when the dashboard build command is empty. Needs no secrets |
 | `npm run deploy:self` | Build and deploy from your own machine. Refuses while the Worker is named `dropreceive` or a route points at `drop.habor.dpdns.org`; a `workers.dev`-only Worker or your own domain is fine |
-| `npm run deploy:production` | Maintainers only: builds the production profile (`DROP_PROFILE=production`, Worker `dropreceive`, custom domain `drop.habor.dpdns.org`) and checks the generated config before deploying |
+| `npm run deploy:production` | Maintainers only: builds the production profile (`DROP_PROFILE=production`, Worker `dropreceive`, custom domain `drop.habor.dpdns.org`) and checks the generated config before deploying. Inline `DROP_SECRETS_STORE_ID` and `DROP_COOKIE_KEY_SECRET_NAME` on the same command (see Development below) |
 
 Without the button: fork or clone, `npx wrangler login`, `npm ci`, then `npm run deploy:self`. Optionally copy `.dev.vars.example` to `.dev.vars` and uncomment what you have; it is uploaded as the Worker's secrets.
 
@@ -118,7 +118,7 @@ Maintainer client IDs are registered only for `https://drop.habor.dpdns.org`. Th
 
 - [Contributing](CONTRIBUTING.md) · [Architecture](docs/architecture.md) ([中文](docs/architecture.zh-CN.md)) · [Security policy](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md)
 - GitHub Actions runs typecheck, tests, lint and build on pushes and pull requests. CI does not use deployment secrets.
-- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and P2P rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 37 script tests plus 323 others; lint is kept at 0 errors (the react-hooks `refs` and `set-state-in-effect` rules are temporarily warnings, to be fixed later).
+- `npm test` runs the script tests and then the unit and integration tests: the transfer protocol and P2P rooms, the scanner helpers, the drive-auth broker, cross-tab token renewal, and the drive store (sync, delete, token expiry). At the time of writing that is 37 script tests plus 362 others; lint is kept at 0 errors and 21 warnings (the react-hooks `refs` and `set-state-in-effect` rules are temporarily warnings, to be fixed later).
 - Community and questions: the project's Telegram group, <https://t.me/droprevive>. Report security problems privately, see [SECURITY.md](SECURITY.md).
 - `wrangler.jsonc` is the public profile. The production site is a build profile in `scripts/wrangler-profile.mjs`; `npm test` checks that the public, production and staging configs come out as expected.
 
@@ -138,11 +138,11 @@ npm run lint
 npm run build
 npm run deploy          # build, check the public profile, wrangler deploy (what the button runs)
 npm run deploy:self     # build + deploy your own copy; refuses the maintainer's Worker and domain
-npm run deploy:production # updates https://drop.habor.dpdns.org only
-STAGING_WORKER=<name> npm run deploy:staging  # maintainers: deploys a test Worker on workers.dev; refuses without STAGING_WORKER
+npm run deploy:production # maintainers only: updates https://drop.habor.dpdns.org (see below)
+STAGING_WORKER=<name> npm run deploy:staging  # maintainers: deploys a test Worker; refuses if STAGING_WORKER is unset or equals the production Worker
 ```
 
-Using Secrets Store? Every `deploy*` script rebuilds, so export `DROP_SECRETS_STORE_ID` (and `DROP_COOKIE_KEY_SECRET_NAME` if the Worker has its own cookie key) in the same shell first. Without them the deploy goes out with no Store bindings.
+Every `deploy*` script rebuilds. The production Worker reads drive settings from Cloudflare Secrets Store, so `npm run deploy:production` must have `DROP_SECRETS_STORE_ID` and `DROP_COOKIE_KEY_SECRET_NAME` **inlined on that same command** (do not write them to a file or a shell rc). A production build without them has no `SS_*` bindings and both drives show as not configured. To look up the store id and the cookie-key secret name without reading any secret values: `npx wrangler deployments list --name dropreceive` for the current version id, then `npx wrangler versions view <version-id> --name dropreceive --json` and take `store_id` and `secret_name` from the `SS_*` bindings; cross-check the store id with `npx wrangler secrets-store store list --remote`. Use them only when the two sides agree and the store is unique. A staging deploy requires `STAGING_WORKER` on the command; the script refuses if it is unset or if the name is the production Worker.
 
 ## Acknowledgements
 

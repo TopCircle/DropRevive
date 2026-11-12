@@ -150,10 +150,10 @@ sequenceDiagram
 | `src/routes/privacy.tsx` | 隐私说明（中英文） |
 | `src/routes/api/drive-auth/$.ts` → `src/lib/drop/oauth.server.ts` | 登录经纪 |
 | `src/lib/drop/drive-session.ts`、`drive-token.ts` | 浏览器端续签、跨标签页协调 |
-| `src/lib/drop/store.ts` 和 `store-*.ts`（见第 5 节）、`google.ts`、`microsoft.ts`、`reconcile.ts` | 同步、上传、下载、删除、对账 |
+| `src/lib/drop/store.ts` 和 `store-*.ts`（见第 5 节）、`google.ts`、`microsoft.ts`、`upload-retry.ts`、`reconcile.ts` | 同步、上传（分块续传与重试）、下载、删除、对账 |
 | `server/routes/api/transfer*.ts`、`server/transfer-*.ts`、`exports.cloudflare.ts` | 直传的 HTTP / WebSocket 入口和两个 Durable Object |
 | `src/lib/transfer/` | 直传协议、分块、限额（`limits.ts`）、重连；扫码辅助 `scan-camera.ts`、`scan-decode.ts`（第 6 节） |
-| `src/lib/links.ts`、`src/components/drop/telegram-icon.tsx` | Telegram 群组地址（`SECURITY.md` 里也有，由测试保证两处一致）和用在隐私页、设置旁边的 logo |
+| `src/lib/links.ts`、`src/components/drop/telegram-icon.tsx`、`github-icon.tsx` | Telegram 群组地址（`SECURITY.md` 里也有，由测试保证两处一致）和 GitHub 仓库地址（`GITHUB_URL`）。图标在设置旁边；Telegram 图标也出现在隐私说明页，该页没有 GitHub 链接 |
 | `scripts/deploy-self.mjs`、`scripts/deploy-staging.mjs`、`.github/workflows/ci.yml` | 带保护的自建部署、测试站部署、CI |
 | `scripts/wrangler-profile.mjs`、`scripts/check-profile.mjs` | 公开 / 正式站 Worker 配置（`DROP_PROFILE`），构建后核对配置 |
 | `src/routes/setup.tsx`、`src/lib/setup-status.ts`、`src/lib/runtime-config.ts`、`src/lib/server-config.ts` | `/setup` 自检页，运行时读取 Worker 设置 |
@@ -174,7 +174,7 @@ flowchart TB
   Cache["store-cache.ts<br/>blob cache, downloads"]
   Shelves["store-shelves.ts<br/>sidebar folders"]
   Settings["store-settings.ts<br/>theme, device name"]
-  Clients["google.ts / microsoft.ts<br/>drive clients"]
+  Clients["google.ts / microsoft.ts / upload-retry.ts<br/>drive clients, chunked upload"]
   Tok["drive-token.ts / drive-session.ts<br/>token refresh, cross-tab locks"]
   Store --> Core
   Store --> Session
@@ -193,7 +193,9 @@ flowchart TB
 
 同步运行期间到来的同步请求会共用这一轮，并且只再排一轮。列表中途失败不会清掉已有的本地历史。store 有单元测试（`store.test.ts`、`store.sync.test.ts`），用假的网盘客户端（`store.test-fakes.ts`）。
 
-云端上传由浏览器直接发到 Google Drive 或 Microsoft Graph。不超过 5 MB（Google）或 4 MB（OneDrive）的文件一次传完；更大的文件先开可恢复会话，再按约 8 MiB、符合各接口倍数要求的分块顺序 PUT。某一片失败时向服务端查询已收进度并从断点续传。只重试网络错误、5xx 和 429（最多 3 次），并有单次超时和无进度卡死检测。401 会刷新访问令牌再试一次，Google 大文件分块和 OneDrive 简单上传也包括在内。
+云端上传由浏览器直接发到 Google Drive 或 Microsoft Graph（`google.ts`、`microsoft.ts`，共用辅助在 `upload-retry.ts`）。不超过 5 MB 的 Google 文件走一次 `uploadType=multipart`，不超过 4 MB 的 OneDrive 文件走简单上传；更大的文件先开可恢复会话，再按分块顺序 PUT：Google 每块 8 MiB（256 KiB 的倍数），OneDrive 每块 320 KiB × 26（约 8.13 MiB），最后一块可以不足整块。某一片失败时向服务端查询已收进度并从该偏移续传（Google：空 PUT，带 `Content-Range: bytes */total`，期望 308 和 Range 头；OneDrive：GET `uploadUrl` 取 `nextExpectedRanges`）。只重试网络错误、5xx 和 429（最多 3 次，从 300 ms 起指数退避），单片超时 180 秒、无进度卡死检测 30 秒；其他 4xx 不会盲目重试。401 会刷新访问令牌再试一次，Google 大文件分块和 OneDrive 简单上传也包括在内。进度单调前进（重传时不会退回 0）。刷新页面或取消后不能从断点恢复。用户可见的大小上限不变。
+
+云盘下载仍是把整个文件作为 `Blob` 载入内存（`downloadGoogleBlob` / `downloadMicrosoftBlob` 调用 `response.blob()`），再写入 IndexedDB 缓存。
 
 ## 6. 点对点直传：HTTP 入口和页面内扫码器
 
@@ -234,6 +236,8 @@ flowchart LR
 | 没有 bye 的中断 | 显示「重连中」；恢复逻辑照旧（ICE 重启、信令重连，间隔 1 秒到 30 秒退避）。标签页回到前台（`visibilitychange`）时 `link.nudge()` 检查断掉的信令 / 通道 / 对端，立即开始恢复 |
 | `RECONNECT_GRACE_MS`（10 分钟）内没恢复 | 客户端放弃，或服务器闹钟向还连着的一端发 `peer-left`（`reason: "gone"`）。清空会话，保留没保存的文件，给出提示 |
 | 服务器空闲 / 硬上限过期 | 照旧（`ROOM_TTL_MS` 空闲 10 分钟，`MAX_SESSION_MS` 2 小时）。已配对的一端掉线时，`markAbsent` 把房间过期时间推到至少重连窗口加 1 分钟（不超过硬上限），空闲过期不会先结束房间 |
+
+限额（`src/lib/transfer/limits.ts`）：单文件 32 MiB（`MAX_FILE_BYTES`），整批 64 MiB（`MAX_BATCH_BYTES`），最多 8 个文件（`MAX_FILES`），文字 32 KiB（`MAX_TEXT_BYTES`）。
 
 内存：收到的文件以字节形式存在 store 里，直到保存或「移除」；缩略图（Blob URL）在保存、移除和会话结束时释放；没保存的超过 128 MiB（`UNSAVED_WARN_BYTES`）时提醒一次；时间线最多 200 条（`MAX_TIMELINE`），进行中的批次和含未保存文件的批次不会被删。
 

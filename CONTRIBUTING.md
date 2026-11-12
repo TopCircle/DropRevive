@@ -22,7 +22,7 @@ npm run typecheck  # tsc --noEmit
 npm run build      # production build into .output/
 ```
 
-CI (GitHub Actions) runs `npm ci`, typecheck, test, lint and build on every push and pull request. Run the same commands locally before you open a pull request. Lint is kept at 0 errors and 0 warnings. At the time of writing `npm test` runs 37 script tests plus 323 unit and integration tests.
+CI (GitHub Actions) runs `npm ci`, typecheck, test, lint and build on every push and pull request. Run the same commands locally before you open a pull request. Lint must report 0 errors; at the time of writing there are 21 warnings from the react-hooks `refs` and `set-state-in-effect` rules (temporarily set to warn, to be fixed later). At the time of writing `npm test` runs 37 script tests plus 362 unit and integration tests.
 
 ### Testing on a phone
 
@@ -33,7 +33,7 @@ Camera and focus behaviour cannot be checked in a desktop browser, so try P2P pa
 1. Branch from `main` with a short descriptive name (for example `fix/transfer-timeout`).
 2. Keep each change focused, with tests where behavior changes.
 3. Open a pull request against `main`. CI must pass before merge.
-4. Only maintainers deploy the production site with `npm run deploy:production`. Anyone can self-host with the Deploy to Cloudflare button or `npm run deploy:self`; see [`docs/self-host.md`](docs/self-host.md).
+4. Only maintainers deploy the production site with `npm run deploy:production`, and only with `DROP_SECRETS_STORE_ID` and `DROP_COOKIE_KEY_SECRET_NAME` inlined on that command (how to look the values up is in the README, Development). A staging deploy needs `STAGING_WORKER`. Anyone can self-host with the Deploy to Cloudflare button or `npm run deploy:self`; see [`docs/self-host.md`](docs/self-host.md).
 
 ### Releases (maintainers)
 
@@ -72,7 +72,7 @@ npm run typecheck  # tsc --noEmit
 npm run build      # 生产构建，输出到 .output/
 ```
 
-CI（GitHub Actions）在每次 push 和 pull request 时跑 `npm ci`、类型检查、测试、lint 和构建。开 pull request 前请在本地跑一遍同样的命令。lint 保持 0 error、0 warning。写这段时 `npm test` 共跑 37 个脚本测试加 323 个单元和集成测试。
+CI（GitHub Actions）在每次 push 和 pull request 时跑 `npm ci`、类型检查、测试、lint 和构建。开 pull request 前请在本地跑一遍同样的命令。lint 必须 0 个 error；写这段时有 21 个 warning，来自暂时设为 warn 的 react-hooks `refs` 和 `set-state-in-effect` 规则（之后修复）。写这段时 `npm test` 共跑 37 个脚本测试加 362 个单元和集成测试。
 
 ### 在手机上测试
 
@@ -83,7 +83,7 @@ CI（GitHub Actions）在每次 push 和 pull request 时跑 `npm ci`、类型�
 1. 从 `main` 拉分支，名字简短说明用途（例如 `fix/transfer-timeout`）。
 2. 每个改动保持聚焦；行为有变化就补测试。
 3. 向 `main` 开 pull request。CI 通过后才能合并。
-4. 只有维护者能用 `npm run deploy:production` 更新正式站。其他人可以用「Deploy to Cloudflare」按钮或 `npm run deploy:self` 自行部署，见 [`docs/self-host.zh-CN.md`](docs/self-host.zh-CN.md)。
+4. 只有维护者能用 `npm run deploy:production` 更新正式站，且必须在同一条命令里内联 `DROP_SECRETS_STORE_ID` 和 `DROP_COOKIE_KEY_SECRET_NAME`（如何只读查得这些值见 README「开发」一节）。测试站部署需要 `STAGING_WORKER`。其他人可以用「Deploy to Cloudflare」按钮或 `npm run deploy:self` 自行部署，见 [`docs/self-host.zh-CN.md`](docs/self-host.zh-CN.md)。
 
 ### 发布（维护者）
 
