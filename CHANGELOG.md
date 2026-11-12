@@ -6,6 +6,8 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-12
+
 已于 2026-11-12 部署到正式站。 / Deployed to the production site on 2026-11-12.
 
 ### 中文
@@ -72,7 +74,8 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 - **Security**: Google uses only `drive.file`; refresh tokens live only in encrypted HttpOnly cookies. Report vulnerabilities privately (see SECURITY.md).
 - **Known limitations**: mobile background tabs may suspend WebRTC, so keep the page in front while transferring; some networks block the direct link, so use the cloud inbox.
 
-[Unreleased]: https://github.com/TopCircle/DropRevive/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/TopCircle/DropRevive/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/TopCircle/DropRevive/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/TopCircle/DropRevive/releases/tag/v1.2.0
 [1.1.0]: https://github.com/TopCircle/DropRevive/releases/tag/v1.1.0
 [1.0.0]: https://github.com/TopCircle/DropRevive/releases/tag/v1.0.0
