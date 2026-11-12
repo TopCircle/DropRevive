@@ -150,10 +150,10 @@ Clearing local cache removes only the browser rows above; drive files remain. De
 | `src/routes/privacy.tsx` | Privacy notice (Chinese and English) |
 | `src/routes/api/drive-auth/$.ts` → `src/lib/drop/oauth.server.ts` | Sign-in broker |
 | `src/lib/drop/drive-session.ts`, `drive-token.ts` | Browser-side refresh and cross-tab coordination |
-| `src/lib/drop/store.ts` and `store-*.ts` (see section 5), `google.ts`, `microsoft.ts`, `reconcile.ts` | Sync, upload, download, delete, reconcile |
+| `src/lib/drop/store.ts` and `store-*.ts` (see section 5), `google.ts`, `microsoft.ts`, `upload-retry.ts`, `reconcile.ts` | Sync, upload (chunked resumable sessions and retry), download, delete, reconcile |
 | `server/routes/api/transfer*.ts`, `server/transfer-*.ts`, `exports.cloudflare.ts` | Transfer HTTP / WebSocket entry and two Durable Objects |
 | `src/lib/transfer/` | Transfer protocol, chunking, limits (`limits.ts`), reconnect; scanner helpers `scan-camera.ts` and `scan-decode.ts` (section 6) |
-| `src/lib/links.ts`, `src/components/drop/telegram-icon.tsx` | The Telegram group URL (also in `SECURITY.md`; a test keeps them equal) and the logo used on the privacy page and next to Settings |
+| `src/lib/links.ts`, `src/components/drop/telegram-icon.tsx`, `github-icon.tsx` | The Telegram group URL (also in `SECURITY.md`; a test keeps them equal) and the GitHub repository URL (`GITHUB_URL`). Icons sit next to Settings; the Telegram icon also appears on the privacy page, which has no GitHub link |
 | `scripts/deploy-self.mjs`, `scripts/deploy-staging.mjs`, `.github/workflows/ci.yml` | Guarded self-host deploy, staging deploy, CI |
 | `scripts/wrangler-profile.mjs`, `scripts/check-profile.mjs` | Public vs production Worker profile (`DROP_PROFILE`), post-build config check |
 | `src/routes/setup.tsx`, `src/lib/setup-status.ts`, `src/lib/runtime-config.ts`, `src/lib/server-config.ts` | `/setup` self-check, Worker settings read at request time |
@@ -174,7 +174,7 @@ flowchart TB
   Cache["store-cache.ts<br/>blob cache, downloads"]
   Shelves["store-shelves.ts<br/>sidebar folders"]
   Settings["store-settings.ts<br/>theme, device name"]
-  Clients["google.ts / microsoft.ts<br/>drive clients"]
+  Clients["google.ts / microsoft.ts / upload-retry.ts<br/>drive clients, chunked upload"]
   Tok["drive-token.ts / drive-session.ts<br/>token refresh, cross-tab locks"]
   Store --> Core
   Store --> Session
@@ -193,7 +193,9 @@ flowchart TB
 
 Sync requests that arrive during a run share it and queue exactly one more pass. A listing that fails part-way never wipes existing local history. The store has unit tests (`store.test.ts`, `store.sync.test.ts`) built on fake drive clients (`store.test-fakes.ts`).
 
-Cloud uploads go from the browser straight to Google Drive or Microsoft Graph. Files at or under 5 MB (Google) or 4 MB (OneDrive) use a single request. Larger files open a resumable session and are PUT in sequential chunks (about 8 MiB, aligned to each API's required multiple); a failed chunk is queried for server progress and resumed. Retries cover network errors, 5xx and 429 only (up to three attempts, with a per-request timeout and stall watchdog). A 401 renews the access token once and retries, including Google large-file chunks and OneDrive simple uploads.
+Cloud uploads go from the browser straight to Google Drive or Microsoft Graph (`google.ts`, `microsoft.ts`, helpers in `upload-retry.ts`). Files at or under 5 MB (Google, a single `uploadType=multipart` request) or 4 MB (OneDrive, simple upload) are sent in one go. Larger files open a resumable session and are PUT in sequential chunks: 8 MiB for Google (a multiple of 256 KiB) and 320 KiB × 26 (~8.13 MiB) for OneDrive, with a shorter last chunk allowed. After a failed chunk the client queries the server for progress (Google: an empty PUT with `Content-Range: bytes */total`, expecting 308 and a Range header; OneDrive: GET the `uploadUrl` for `nextExpectedRanges`) and continues from that offset. Retries cover network errors, 5xx and 429 only (up to three attempts, exponential backoff from 300 ms), with a 180 s timeout and a 30 s stall watchdog; other 4xx are not retried blindly. A 401 renews the access token once and retries, on Google large-file chunks and on OneDrive simple uploads. Progress is monotonic (it does not jump back to 0 on a retry). An upload does not resume after a page refresh or a cancelled attempt. User-visible size limits are unchanged.
+
+Cloud downloads still fetch the entire file into memory as a `Blob` (`downloadGoogleBlob` / `downloadMicrosoftBlob` call `response.blob()`), then cache it in IndexedDB.
 
 ## 6. P2P Transfer: HTTP entry and the in-page scanner
 
@@ -234,6 +236,8 @@ The session is owned by the tab, not by the panel. `src/lib/transfer/lan-session
 | Drop without bye | **Reconnecting**; recovery as before (ICE restart, socket reconnect with 1 s → 30 s backoff). On `visibilitychange` to visible, `link.nudge()` reports a dropped socket/channel/peer so recovery starts at once |
 | No recovery within `RECONNECT_GRACE_MS` (10 min) | The client gives up, or the server alarm sends `peer-left` (`reason: "gone"`) to the side still connected. Session cleared, unsaved files kept, notice |
 | Server idle / hard expiry | As before (`ROOM_TTL_MS` 10 min idle, `MAX_SESSION_MS` 2 h). When a paired side drops, `markAbsent` pushes the room's expiry to at least the reconnect window plus 1 min (capped by the hard limit), so idle expiry cannot end the room first |
+
+Limits (`src/lib/transfer/limits.ts`): 32 MiB per file (`MAX_FILE_BYTES`), 64 MiB per batch (`MAX_BATCH_BYTES`), at most 8 files (`MAX_FILES`), 32 KiB of text (`MAX_TEXT_BYTES`).
 
 Memory: received files are held as bytes in the store until saved or removed (**Remove**); thumbnails (Blob URLs) are revoked on save, on remove and when the session ends; a warning fires once when unsaved bytes cross 128 MiB (`UNSAVED_WARN_BYTES`); the timeline keeps at most 200 entries (`MAX_TIMELINE`), never dropping open batches or ones with unsaved files.
 

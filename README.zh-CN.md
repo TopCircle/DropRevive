@@ -22,7 +22,7 @@ DropRevive 是独立项目，用来补 Edge Drop 停用之后的同类需求。�
 
 **用手机扫二维码。** 页面内的扫码器在浏览器有 `BarcodeDetector` 时优先用它；没有、报错，或者几秒内一直读不出东西时，改用按需加载的 jsQR 解码。`BarcodeDetector` 可能存在却不好用（例如没有 Google 服务的安卓浏览器），所以兜底并不只在它缺失时才启用。摄像头请求 1280x720、30 帧；浏览器支持时开启连续对焦、点击取景框对焦，摄像头带闪光灯时显示手电筒按钮。取景框铺满面板宽度。出问题（没给权限、没有摄像头、扫到别的站点的码、10 秒什么都没读到）只用简短的 toast 提示，不会在画面上盖文字。随时可以改为手动输入 8 位代码。想看某台设备上扫码器的实际状态，用 `?scandebug=1` 打开站点（见[参与开发](CONTRIBUTING.md)）。
 
-配对时要能访问站点。传文件时不经过 Worker。大多数网络下是点对点直连：公共 STUN 服务器（Cloudflare、Google，以及国内的 bilibili、hitv）只用来让设备知道自己的公网 IP，看不到文件内容。没有 TURN，也没有服务器中继，所以部分网络（运营商大内网、公司或访客 Wi-Fi）连不上，可以换到同一个 Wi-Fi，或改用云端。没有局域网自动发现。单文件最大 32 MiB，整批最大 64 MiB，文字最大 32 KiB。传完后逐个点击保存。
+配对时要能访问站点。传文件时不经过 Worker。大多数网络下是点对点直连：公共 STUN 服务器（Cloudflare、Google，以及国内的 bilibili、hitv）只用来让设备知道自己的公网 IP，看不到文件内容。没有 TURN，也没有服务器中继，所以部分网络（运营商大内网、公司或访客 Wi-Fi）连不上，可以换到同一个 Wi-Fi，或改用云端。没有局域网自动发现。限额：单文件最大 32 MiB，整批最大 64 MiB，最多 8 个文件，文字最大 32 KiB。传完后逐个点击保存。
 
 会话属于浏览器标签页，不属于点对点直传页面：可以切到收件箱、网盘或设置，回来时仍然连着。点对点直传页面没打开时，导航里的「点对点直传」会显示绿点（已连接）和待处理数量（待接收的发送、没保存的文件），新的发送和收到的文件会弹出提示；对方发来的内容一律等你点接收。只有三种情况会结束会话：点「断开」、关掉标签页、对方离开：
 
@@ -33,12 +33,12 @@ DropRevive 是独立项目，用来补 Edge Drop 停用之后的同类需求。�
 
 现在能做的事：
 
-- 发送文字和文件，并从任一已连接的网盘下载、预览、筛选。
+- 发送文字和文件，并从任一已连接的网盘下载、预览、筛选。云盘上传超过 5 MB（Google Drive）或 4 MB（OneDrive）时按约 8 MiB 分块顺序传送，同一页面会话内失败的分块可以从断点续传；刷新页面或取消后会从头开始。云盘下载仍是把整个文件载入内存。
 - 后台同步，以及手动「立即同步」。列表不完整时，已有的本地历史会保留。
 - 中文和英文、浅色 / 深色 / 跟随系统、设备名。
 - 安装到桌面（PWA）。安装后的图标和浏览器标签图标是两套图。
 - 断网时查看这台设备已经同步过的记录。
-- 设置旁边有一个 Telegram 图标（隐私说明页里也有链接），点开就是项目的 Telegram 群组。
+- 设置旁边有一个 Telegram 图标（隐私说明页里也有链接），点开就是项目的 Telegram 群组。它旁边还有一个 GitHub 图标，点开即进入项目仓库（<https://github.com/TopCircle/DropRevive>）；隐私说明页没有改动。
 
 断网时的新内容不会排队。投送会直接失败，也不会写入本机历史。删除同样要等网络恢复后再做。清除本机缓存之后，云端文件仍在网盘里；在应用里删除一条记录时，对应文件才会从网盘移除。
 
@@ -104,7 +104,7 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 | `npm run build` | 按公开配置构建到 `.output/`（Worker `droprevive`，`workers.dev`，无路由） |
 | `npm run deploy` | 先构建，再核对构建是公开配置（workers.dev 开启、无路由、不叫 `dropreceive`），再 `wrangler deploy`。部署按钮跑的就是它；它自己会先构建，所以后台构建命令为空也能部署。不需要任何密钥 |
 | `npm run deploy:self` | 在自己电脑上构建并部署。Worker 仍叫 `dropreceive`，或路由指向 `drop.habor.dpdns.org` 时拒绝；只用 `workers.dev` 或用你自己的域名都可以 |
-| `npm run deploy:production` | 仅维护者：按正式站配置构建（`DROP_PROFILE=production`，Worker `dropreceive`，自定义域名 `drop.habor.dpdns.org`），部署前核对生成的配置 |
+| `npm run deploy:production` | 仅维护者：按正式站配置构建（`DROP_PROFILE=production`，Worker `dropreceive`，自定义域名 `drop.habor.dpdns.org`），部署前核对生成的配置。同一条命令须内联 `DROP_SECRETS_STORE_ID` 和 `DROP_COOKIE_KEY_SECRET_NAME`（见「开发」一节） |
 
 不用按钮：fork 或 clone，`npx wrangler login`，`npm ci`，再运行 `npm run deploy:self`。已经有值的话，可以把 `.dev.vars.example` 复制成 `.dev.vars`，取消注释并填上，会作为 Worker 密钥一起上传。
 
@@ -118,7 +118,7 @@ OneDrive 目前没有一个更窄的范围能保持现在的用法。`Files.Read
 
 - [参与开发](CONTRIBUTING.md) · [架构说明](docs/architecture.zh-CN.md)（[English](docs/architecture.md)）· [安全策略](SECURITY.md) · [行为准则](CODE_OF_CONDUCT.md)
 - GitHub Actions 会在 push 和 pull request 时运行类型检查、测试、lint 和构建；CI 不使用部署密钥。
-- `npm test` 先跑脚本测试，再跑单元和集成测试：传送协议和直传房间、扫码辅助逻辑、网盘登录经纪、跨标签页续签，以及网盘 store（同步、删除、令牌过期）。写这段时共有 37 个脚本测试加 323 个其他测试；lint 保持 0 error（react-hooks 的 `refs` 和 `set-state-in-effect` 两条规则暂时为 warning，之后修复）。
+- `npm test` 先跑脚本测试，再跑单元和集成测试：传送协议和直传房间、扫码辅助逻辑、网盘登录经纪、跨标签页续签，以及网盘 store（同步、删除、令牌过期）。写这段时共有 37 个脚本测试加 362 个其他测试；lint 保持 0 个 error、21 个 warning（react-hooks 的 `refs` 和 `set-state-in-effect` 两条规则暂时为 warning，之后修复）。
 - 交流和提问：项目的 Telegram 群组 <https://t.me/droprevive>。安全问题请私下报告，见 [SECURITY.md](SECURITY.md)。
 - `wrangler.jsonc` 是公开配置。正式站是 `scripts/wrangler-profile.mjs` 里的一个构建配置；`npm test` 会检查公开、正式、测试站三套配置生成得对不对。
 
@@ -138,11 +138,11 @@ npm run lint
 npm run build
 npm run deploy          # 构建、核对公开配置，再 wrangler deploy（部署按钮跑的就是它）
 npm run deploy:self     # 构建并部署你自己的副本；拒绝维护者的 Worker 和域名
-npm run deploy:production # 只更新 https://drop.habor.dpdns.org
-STAGING_WORKER=<名字> npm run deploy:staging  # 维护者用：部署到 workers.dev 上的测试 Worker；没设 STAGING_WORKER 会拒绝
+npm run deploy:production # 仅维护者：只更新 https://drop.habor.dpdns.org（见下方）
+STAGING_WORKER=<名字> npm run deploy:staging  # 维护者：部署测试 Worker；没设 STAGING_WORKER、或名字等于正式站 Worker 时会拒绝
 ```
 
-用了 Secrets Store？每个 `deploy*` 脚本都会重新构建，所以先在同一个终端里 export `DROP_SECRETS_STORE_ID`（Worker 用自己的 Cookie 密钥时再加 `DROP_COOKIE_KEY_SECRET_NAME`）。没设的话，部署出去就没有 Store 绑定。
+每个 `deploy*` 脚本都会重新构建。正式站 Worker 的网盘设置来自 Cloudflare Secrets Store，因此跑 `npm run deploy:production` 时必须把 `DROP_SECRETS_STORE_ID` 和 `DROP_COOKIE_KEY_SECRET_NAME` **写在同一条命令里内联**（不要写入文件或 shell rc）。没设的构建没有 `SS_*` 绑定，两个网盘都会显示「未开通」。只读查看 store id 和 Cookie 密钥的 secret 名（不要读密钥值）：先用 `npx wrangler deployments list --name dropreceive` 得到当前 version id，再 `npx wrangler versions view <version-id> --name dropreceive --json`，从 `SS_*` 绑定取 `store_id` 和 `secret_name`；再用 `npx wrangler secrets-store store list --remote` 交叉确认 store id。只有两处一致且该 Store 唯一时才用。测试站部署必须在命令里带 `STAGING_WORKER`；未设置、或名字等于正式站 Worker 时脚本会拒绝。
 
 ## 致谢
 
