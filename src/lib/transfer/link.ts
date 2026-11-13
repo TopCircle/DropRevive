@@ -1,5 +1,5 @@
 import type { MessageKey } from "../i18n/types.ts";
-import type { FileAssembler } from "./assemble.ts";
+import type { FileAssembler, StreamAssembler } from "./assemble.ts";
 import type { ControlState } from "./control.ts";
 import { CONNECT_TIMEOUT_MS, ICE_SETTLE_MS, LEASE_INTERVAL_MS, RECONNECT_GRACE_MS } from "./limits.ts";
 import { lostSocketNeedsFail } from "./panel-flow.ts";
@@ -9,6 +9,7 @@ import { createRecovery } from "./recovery.ts";
 import { dlog, logSignal, watchPeer } from "./diagnostics.ts";
 import { visibleNudge } from "./session-state.ts";
 import { browserPeer, closedSession, connectSession, type DataChannelLike, type PeerLike, type Session } from "./session.ts";
+import type { StreamPlat } from "./stream-cap.ts";
 
 export type TransferPhase = "idle" | "hosting" | "joining" | "connected" | "offering" | "confirm" | "sending" | "receiving" | "failed";
 
@@ -26,7 +27,7 @@ export type TransferLink = {
   manifest: { textBytes: number; files: ManifestFile[] } | null;
   snapshotText: string;
   snapshotFiles: File[];
-  assemblers: Map<string, FileAssembler>;
+  assemblers: Map<string, FileAssembler | StreamAssembler>;
   textAssembler: FileAssembler | null;
   textDone: boolean;
   filesDone: Set<string>;
@@ -40,6 +41,16 @@ export type TransferLink = {
   stream: MediaStream | null;
   scan: number;
   openTimer: number;
+  /** True when the remote SDP advertised stream-v2. Until then we behave as v1. */
+  peerStreamV2: boolean;
+  peerPlat: StreamPlat;
+  /** A v2 transfer is paused across a reconnect instead of being aborted. */
+  paused: boolean;
+  /** Bytes already sent per file id, used to resume a v2 send. */
+  sentOffsets: Map<string, number>;
+  textSent: boolean;
+  /** v2: checksums from the sender, applied once every file is in. */
+  pendingDigest: { id: string; sha256: string }[] | null;
 };
 
 export type LanHooks = {
@@ -48,6 +59,8 @@ export type LanHooks = {
   text(key: MessageKey): string;
   onData(data: string | ArrayBuffer): void;
   onServer(message: ServerSignal): void;
+  /** v2: the data channel is open again after a drop; send a resume or continue a send. */
+  onResumed(): void;
 };
 
 export type LanLink = {
@@ -93,6 +106,12 @@ export function freshLink(): TransferLink {
     stream: null,
     scan: 0,
     openTimer: 0,
+    peerStreamV2: false,
+    peerPlat: "other",
+    paused: false,
+    sentOffsets: new Map(),
+    textSent: false,
+    pendingDigest: null,
   };
 }
 
@@ -257,6 +276,12 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     const link = linkRef.current;
     const busy = link.control === "outgoing" || link.control === "incoming" || link.control === "sending" || link.control === "receiving";
     if (!busy) return;
+    // v2: keep offsets, sinks and the File handles so we can resume on the same page.
+    if (link.peerStreamV2) {
+      link.paused = true;
+      say("connected", text("transfer.reconnecting"));
+      return;
+    }
     batchAborted = true;
     link.control = "ready";
     link.activeId = null;
@@ -265,18 +290,31 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
     link.textAssembler = null;
     link.textDone = false;
     link.filesDone = new Set();
+    link.sentOffsets = new Map();
+    link.textSent = false;
+    link.pendingDigest = null;
     syncLease();
     say("connected", text("transfer.reconnecting"));
   }
 
   function noteRecovered(): void {
     const link = linkRef.current;
-    if (!link.opened || (!recovery.recovering && !batchAborted)) return;
+    if (!link.opened || (!recovery.recovering && !batchAborted && !link.paused)) return;
     if (link.socket?.readyState !== WebSocket.OPEN) return;
     if (link.channel?.readyState !== "open") return;
     if (link.peer?.connectionState !== "connected") return;
     if (recovery.recovering) recovery.reset();
     preparedRestart = false;
+    if (link.paused && link.peerStreamV2) {
+      link.paused = false;
+      hooksRef.current.onResumed();
+      if (link.control === "sending") say("sending");
+      else if (link.control === "receiving") say("receiving");
+      else if (link.control === "outgoing") say("offering", text("transfer.waitingAccept"));
+      else if (link.control === "incoming") say("confirm");
+      else say("connected", text("transfer.connected"));
+      return;
+    }
     if (batchAborted) {
       batchAborted = false;
       link.control = "ready";
@@ -467,6 +505,11 @@ export function createLanLink(linkRef: { current: TransferLink }, hooksRef: { cu
       onChannel: armChannel,
       onChannelClose() {
         applyFault("dc-close");
+      },
+      onRemoteCap(cap) {
+        const live = linkRef.current;
+        live.peerStreamV2 = cap?.v2 === true;
+        live.peerPlat = cap?.plat ?? "other";
       },
     })
       .then((session) => {

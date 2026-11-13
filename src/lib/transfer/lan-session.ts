@@ -9,15 +9,18 @@
  */
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { MessageKey } from "../i18n/types.ts";
-import { FileAssembler } from "./assemble.ts";
+import { FileAssembler, StreamAssembler, type ByteSink } from "./assemble.ts";
 import { generateCode, isRoomCode } from "./code.ts";
 import { onRemoteControl } from "./control.ts";
-import { ASSUMED_MAX_MESSAGE, BUFFERED_HIGH, CHUNK_BYTES, MAX_BATCH_BYTES, MAX_FILE_BYTES, MAX_FILES, MAX_TEXT_BYTES } from "./limits.ts";
+import { MAX_FILE_BYTES, MAX_TEXT_BYTES } from "./limits.ts";
 import { freshLink, type LanHooks, type LanLink, type TransferLink, type TransferPhase } from "./link.ts";
 import { takeRoomResponse } from "./panel-flow.ts";
-import { decodeChunk, decodeControl, decodeTextChunk, encodeChunk, encodeTextChunk, type ManifestFile, type ServerSignal } from "./protocol.ts";
+import { decodeChunk, decodeChunkV2, decodeControl, decodeTextChunk, type ControlLimits, type ControlMessage, type ManifestFile, type ServerSignal } from "./protocol.ts";
+import { hashSlicedFile, waitBuffer, writeFileChunks, writeTextChunks } from "./send-chunks.ts";
 import type { DataChannelLike } from "./session.ts";
 import { capTimeline, crossedUnsavedLimit, MAX_TIMELINE, unsavedSummary } from "./session-state.ts";
+import { StreamingSha256 } from "./sha256.ts";
+import { detectStreamPlat, negotiatedLimits, type TransferLimits } from "./stream-cap.ts";
 import { CONNECTION_NOTICES, openBatchFails, reduceTimeline, sessionVisible, type SessionEvent, type TimelineEntry } from "./timeline.ts";
 
 export type ReceivedFile = { id: string; name: string; mime: string; bytes: Uint8Array };
@@ -57,9 +60,9 @@ export type LanDeps = {
   revokeObjectURL(url: string): void;
   random?(bytes: number): Uint8Array;
   now?(): number;
+  /** For a file above the in-memory cap, open a disk sink before accepting. Null = cancelled or unavailable. */
+  openSink?(file: { id: string; name: string; mime: string; size: number }): Promise<ByteSink | null>;
 };
-
-type LiveChannel = DataChannelLike & { maxMessageSize?: number; bufferedAmount?: number; onbufferedamountlow: (() => void) | null };
 
 const THUMB_MAX = 10 * 1024 * 1024;
 
@@ -68,40 +71,6 @@ export const BYE = JSON.stringify({ t: "bye" });
 
 /** Notices after which the session is over for good: clear it back to the start screen. */
 const GONE_KEYS = new Set(["transfer.peerLeft", "transfer.peerGone", "transfer.linkLost"]);
-
-function messageLimit(channel: DataChannelLike): number {
-  const max = (channel as LiveChannel).maxMessageSize;
-  return typeof max === "number" && max > 0 ? max : ASSUMED_MAX_MESSAGE;
-}
-
-function waitBuffer(channel: DataChannelLike, ceiling: number): Promise<void> {
-  const live = channel as LiveChannel;
-  if ((live.bufferedAmount ?? 0) <= ceiling) return Promise.resolve();
-  return new Promise((resolve) => {
-    live.onbufferedamountlow = () => resolve();
-  });
-}
-
-function sendFrame(channel: DataChannelLike, frame: Uint8Array): void {
-  const copy = new ArrayBuffer(frame.byteLength);
-  new Uint8Array(copy).set(frame);
-  channel.send(copy);
-}
-
-async function writeChunks(channel: DataChannelLike, id: string, bytes: Uint8Array, text: boolean, onProgress: (sent: number) => void): Promise<void> {
-  if (bytes.byteLength === 0) return;
-  const overhead = 6 + new TextEncoder().encode(id).byteLength;
-  const size = Math.min(CHUNK_BYTES, messageLimit(channel) - overhead);
-  if (size < 1) throw new Error("frame");
-  for (let offset = 0; offset < bytes.byteLength; offset += size) {
-    await waitBuffer(channel, BUFFERED_HIGH);
-    const slice = bytes.subarray(offset, Math.min(bytes.byteLength, offset + size));
-    const frame = text ? encodeTextChunk({ id, offset, bytes: slice }) : encodeChunk({ id, offset, bytes: slice });
-    if (frame.byteLength > messageLimit(channel)) throw new Error("frame");
-    sendFrame(channel, frame);
-    onProgress(Math.min(bytes.byteLength, offset + slice.byteLength));
-  }
-}
 
 export function ownedBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new ArrayBuffer(bytes.byteLength);
@@ -141,11 +110,14 @@ export function createLanSession(deps: LanDeps) {
       text: (key) => t(key),
       onData: (data) => onChannel(data),
       onServer: (message) => onServer(message),
+      onResumed: () => onResumed(),
     },
   };
   let api = deps.createLink(linkRef, hooksRef);
   // Each room attempt gets a number; a reply that arrives after 断开 or a newer attempt is dropped.
   let attempt = 0;
+  let pumpGen = 0;
+  let receiveTail = Promise.resolve();
 
   const get = () => store.getState();
   const set = (partial: Partial<LanState> | ((state: LanState) => Partial<LanState>)) => store.setState(partial);
@@ -281,7 +253,94 @@ export function createLanSession(deps: LanDeps) {
     api.fail(message);
   }
 
-  function sendControl(message: { t: "accept" | "reject" | "complete"; id: string } | { t: "manifest"; id: string; textBytes: number; files: ManifestFile[] }) {
+  function liveLimits(): TransferLimits {
+    const link = linkRef.current;
+    const plat = detectStreamPlat(typeof navigator !== "undefined" ? navigator.userAgent : "");
+    return negotiatedLimits(plat, link.peerStreamV2 ? { v2: true, plat: link.peerPlat } : null);
+  }
+
+  function controlLimitsFor(limits: TransferLimits): ControlLimits {
+    return {
+      maxTextBytes: MAX_TEXT_BYTES,
+      maxFiles: limits.maxFiles,
+      maxFileBytes: limits.maxFileBytes,
+      maxBatchBytes: limits.maxBatchBytes,
+      v2: limits.v2,
+    };
+  }
+
+  function tooBigNote(): string {
+    const limits = liveLimits();
+    return t("transfer.tooBig", { file: deps.formatBytes(limits.maxFileBytes), batch: deps.formatBytes(limits.maxBatchBytes) });
+  }
+
+  function sentSoFar(link: TransferLink): number {
+    const manifest = link.manifest;
+    if (!manifest) return 0;
+    let n = link.textSent ? manifest.textBytes : 0;
+    for (const file of manifest.files) n += Math.min(file.size, link.sentOffsets.get(file.id) ?? 0);
+    return n;
+  }
+
+  function assemblerOffset(link: TransferLink, file: ManifestFile): number {
+    if (link.filesDone.has(file.id)) return file.size;
+    const assembler = link.assemblers.get(file.id);
+    if (assembler instanceof StreamAssembler) return assembler.offset;
+    return 0;
+  }
+
+  function onResumed() {
+    const link = linkRef.current;
+    if (!link.peerStreamV2 || !link.channel || link.channel.readyState !== "open") return;
+    if (link.control !== "receiving" || !link.manifest || !link.activeId) return;
+    sendControl({
+      t: "resume",
+      id: link.activeId,
+      files: link.manifest.files.map((file) => ({ id: file.id, offset: assemblerOffset(link, file) })),
+    });
+  }
+
+  function verifyDigest(link: TransferLink): boolean {
+    const digest = link.pendingDigest;
+    const manifest = link.manifest;
+    if (!digest || !manifest) return false;
+    for (const file of manifest.files) {
+      const expected = digest.find((row) => row.id === file.id)?.sha256;
+      const assembler = link.assemblers.get(file.id);
+      const actual = assembler instanceof StreamAssembler ? assembler.hex() : new StreamingSha256().hex();
+      if (!expected || expected !== actual) return false;
+    }
+    return true;
+  }
+
+  function abortAssemblers(link: TransferLink): void {
+    for (const assembler of link.assemblers.values()) {
+      if (assembler instanceof StreamAssembler) void assembler.abort();
+    }
+  }
+
+  function commitStreamedFiles(link: TransferLink) {
+    if (!link.manifest) return;
+    for (const file of link.manifest.files) {
+      const assembler = link.assemblers.get(file.id);
+      if (!(assembler instanceof StreamAssembler) || file.size === 0) {
+        if (assembler instanceof StreamAssembler) void assembler.close();
+        continue;
+      }
+      try {
+        const bytes = assembler.bytes();
+        keepReceived({ id: file.id, name: file.name, mime: file.mime, bytes });
+        rememberPreviews([{ id: file.id, mime: file.mime, bytes, size: file.size }]);
+      } catch {
+        keepReceived({ id: file.id, name: file.name, mime: file.mime, bytes: new Uint8Array(0) });
+        markSaved(file.id);
+      }
+      void assembler.close();
+    }
+  }
+
+  function sendControl(message: ControlMessage) {
+    if ((message.t === "resume" || message.t === "digest") && !linkRef.current.peerStreamV2) return;
     const channel = linkRef.current.channel;
     if (!channel || channel.readyState !== "open") return;
     channel.send(JSON.stringify(message));
@@ -290,12 +349,13 @@ export function createLanSession(deps: LanDeps) {
   }
 
   function describe(text: string, files: File[]): { textBytes: number; files: ManifestFile[] } | "empty" | "too-big" {
+    const limits = liveLimits();
     const textBytes = new TextEncoder().encode(text).byteLength;
     if (textBytes === 0 && files.length === 0) return "empty";
-    if (textBytes > MAX_TEXT_BYTES || files.length > MAX_FILES) return "too-big";
-    if (files.some((file) => !Number.isInteger(file.size) || file.size > MAX_FILE_BYTES)) return "too-big";
+    if (textBytes > MAX_TEXT_BYTES || files.length > limits.maxFiles) return "too-big";
+    if (files.some((file) => !Number.isInteger(file.size) || file.size > limits.maxFileBytes)) return "too-big";
     const batch = files.reduce((sum, file) => sum + file.size, textBytes);
-    if (batch > MAX_BATCH_BYTES) return "too-big";
+    if (batch > limits.maxBatchBytes) return "too-big";
     const used = new Set<string>();
     const listed = files.map((file) => {
       let id = newId();
@@ -332,7 +392,7 @@ export function createLanSession(deps: LanDeps) {
       return false;
     }
     if (described === "too-big") {
-      show("connected", t("transfer.tooBig"));
+      show("connected", tooBigNote());
       return false;
     }
     const id = newId();
@@ -342,6 +402,9 @@ export function createLanSession(deps: LanDeps) {
     link.snapshotFiles = files.slice();
     link.manifest = described;
     link.total = described.textBytes + described.files.reduce((sum, file) => sum + file.size, 0);
+    link.sentOffsets = new Map();
+    link.textSent = false;
+    link.pendingDigest = null;
     event({
       type: "offer",
       id,
@@ -361,28 +424,55 @@ export function createLanSession(deps: LanDeps) {
     const link = linkRef.current;
     const manifest = link.manifest;
     if (!manifest) return;
+    const gen = (pumpGen += 1);
+    const cancelled = () => gen !== pumpGen;
+    const limits = liveLimits();
     try {
       const encoded = new TextEncoder().encode(link.snapshotText);
-      let sent = 0;
-      if (encoded.byteLength > 0) {
-        await writeChunks(channel, newId(), encoded, true, (at) => {
-          sent = at;
-          publishProgress(sent, link.total);
+      if (encoded.byteLength > 0 && !link.textSent) {
+        await writeTextChunks(channel, newId(), encoded, (at) => {
+          publishProgress(at + sentSoFar(link), link.total);
         });
+        if (cancelled()) return;
+        link.textSent = true;
       }
       for (let index = 0; index < manifest.files.length; index += 1) {
+        if (cancelled()) return;
         const meta = manifest.files[index]!;
         const file = link.snapshotFiles[index];
-        if (!file || meta.size === 0) continue;
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const base = sent;
-        await writeChunks(channel, meta.id, bytes, false, (at) => {
-          sent = base + at;
-          publishProgress(sent, link.total);
+        const start = link.sentOffsets.get(meta.id) ?? 0;
+        if (!file || meta.size === 0 || start >= meta.size) {
+          if (meta.size === 0) link.sentOffsets.set(meta.id, 0);
+          continue;
+        }
+        await writeFileChunks(channel, meta.id, file, {
+          v2: limits.v2,
+          start,
+          chunkBytes: limits.chunkBytes,
+          isCancelled: cancelled,
+          onProgress: (at) => {
+            link.sentOffsets.set(meta.id, at);
+            publishProgress(sentSoFar(link), link.total);
+          },
         });
+        if (cancelled()) return;
+        link.sentOffsets.set(meta.id, meta.size);
       }
       await waitBuffer(channel, 0);
+      if (cancelled()) return;
+      if (limits.v2 && link.activeId) {
+        const files: { id: string; sha256: string }[] = [];
+        for (let index = 0; index < manifest.files.length; index += 1) {
+          if (cancelled()) return;
+          const meta = manifest.files[index]!;
+          const file = link.snapshotFiles[index];
+          files.push({ id: meta.id, sha256: file ? await hashSlicedFile(file) : new StreamingSha256().hex() });
+        }
+        if (cancelled()) return;
+        sendControl({ t: "digest", id: link.activeId, files });
+      }
     } catch {
+      if (cancelled()) return;
       if (channel.readyState !== "open") api.applyFault("dc-close");
       else fail(t("transfer.failed"));
     }
@@ -393,10 +483,20 @@ export function createLanSession(deps: LanDeps) {
     if (link.control !== "receiving" || !link.manifest || !link.activeId) return;
     const filesComplete = link.manifest.files.every((file) => file.size === 0 || link.filesDone.has(file.id));
     if (!link.textDone || !filesComplete) return;
+    if (link.peerStreamV2 && link.total > 0) {
+      if (!link.pendingDigest) return;
+      if (!verifyDigest(link)) {
+        abortAssemblers(link);
+        fail(t("transfer.digestFail"));
+        return;
+      }
+      commitStreamedFiles(link);
+    }
     const id = link.activeId;
     markBatch(id, "done");
     link.control = "ready";
     link.activeId = null;
+    link.pendingDigest = null;
     sendControl({ t: "complete", id });
     show("connected", t("transfer.received"));
   }
@@ -418,9 +518,22 @@ export function createLanSession(deps: LanDeps) {
         fail(t("transfer.peerLeft"));
         return;
       }
-      const control = decodeControl(data);
+      const limits = liveLimits();
+      const control = decodeControl(data, controlLimitsFor(limits));
       if (!control) {
-        fail(data.includes("manifest") ? t("transfer.tooBig") : t("transfer.failed"));
+        fail(data.includes("manifest") ? tooBigNote() : t("transfer.failed"));
+        return;
+      }
+      if (control.t === "resume") {
+        if (!limits.v2 || link.control !== "sending" || control.id !== link.activeId || !link.channel) return;
+        for (const file of control.files) link.sentOffsets.set(file.id, file.offset);
+        void pump(link.channel);
+        return;
+      }
+      if (control.t === "digest") {
+        if (!limits.v2 || link.control !== "receiving" || control.id !== link.activeId) return;
+        link.pendingDigest = control.files;
+        finishReceive();
         return;
       }
       const decision = onRemoteControl({ state: link.control, id: link.activeId }, control);
@@ -475,62 +588,99 @@ export function createLanSession(deps: LanDeps) {
       return;
     }
     if (link.control !== "receiving" || !link.manifest) return;
-    const frame = new Uint8Array(data);
-    const textChunk = decodeTextChunk(frame);
-    const fileChunk = textChunk ? null : decodeChunk(frame);
-    const chunk = textChunk ?? fileChunk;
-    if (!chunk) {
-      fail(t("transfer.failed"));
-      return;
-    }
-    try {
-      if (textChunk) {
-        if (!link.textAssembler) link.textAssembler = new FileAssembler({ id: chunk.id, size: link.manifest.textBytes });
-        const complete = link.textAssembler.push(chunk.offset, chunk.bytes);
-        link.got += chunk.bytes.byteLength;
-        if (complete) {
-          link.textDone = true;
-          const decoded = new TextDecoder().decode(link.textAssembler.bytes());
-          const batchId = link.activeId;
-          set((state) => ({ texts: [...state.texts, decoded] }));
-          if (batchId) event({ type: "text", id: batchId, text: decoded });
-          tellIfClosed(t("transfer.toastText"));
-        }
-      } else {
-        const assembler = link.assemblers.get(chunk.id);
-        const meta = link.manifest.files.find((file) => file.id === chunk.id);
-        if (!assembler || !meta) {
-          fail(t("transfer.failed"));
-          return;
-        }
-        const complete = assembler.push(chunk.offset, chunk.bytes);
-        link.got += chunk.bytes.byteLength;
-        if (complete) {
-          link.filesDone.add(chunk.id);
-          const bytes = assembler.bytes();
-          keepReceived({ id: meta.id, name: meta.name, mime: meta.mime, bytes });
-          rememberPreviews([{ id: meta.id, mime: meta.mime, bytes, size: meta.size }]);
-        }
+    const apply = async () => {
+      const live = linkRef.current;
+      if (live.control !== "receiving" || !live.manifest) return;
+      const frame = new Uint8Array(data);
+      const textChunk = decodeTextChunk(frame);
+      const fileChunk = textChunk ? null : live.peerStreamV2 ? decodeChunkV2(frame) : decodeChunk(frame);
+      const chunk = textChunk ?? fileChunk;
+      if (!chunk) {
+        fail(t("transfer.failed"));
+        return;
       }
-    } catch {
-      fail(t("transfer.failed"));
-      return;
-    }
-    publishProgress(link.got, link.total);
-    finishReceive();
+      try {
+        if (textChunk) {
+          if (!live.textAssembler) live.textAssembler = new FileAssembler({ id: chunk.id, size: live.manifest.textBytes });
+          const complete = live.textAssembler.push(chunk.offset, chunk.bytes);
+          live.got += chunk.bytes.byteLength;
+          if (complete) {
+            live.textDone = true;
+            const decoded = new TextDecoder().decode(live.textAssembler.bytes());
+            const batchId = live.activeId;
+            set((state) => ({ texts: [...state.texts, decoded] }));
+            if (batchId) event({ type: "text", id: batchId, text: decoded });
+            tellIfClosed(t("transfer.toastText"));
+          }
+        } else {
+          const assembler = live.assemblers.get(chunk.id);
+          const meta = live.manifest.files.find((file) => file.id === chunk.id);
+          if (!assembler || !meta) {
+            fail(t("transfer.failed"));
+            return;
+          }
+          const complete = assembler instanceof StreamAssembler ? await assembler.push(chunk.offset, chunk.bytes) : assembler.push(chunk.offset, chunk.bytes);
+          live.got += chunk.bytes.byteLength;
+          if (complete) {
+            live.filesDone.add(chunk.id);
+            if (!live.peerStreamV2) {
+              const bytes = assembler.bytes();
+              keepReceived({ id: meta.id, name: meta.name, mime: meta.mime, bytes });
+              rememberPreviews([{ id: meta.id, mime: meta.mime, bytes, size: meta.size }]);
+            }
+          }
+        }
+      } catch {
+        fail(t("transfer.failed"));
+        return;
+      }
+      publishProgress(live.got, live.total);
+      finishReceive();
+    };
+    if (link.peerStreamV2) receiveTail = receiveTail.then(apply, () => undefined);
+    else void apply();
   }
 
-  function accept() {
+  async function accept() {
     const link = linkRef.current;
     const manifest = link.manifest;
     const channel = link.channel;
     if (!manifest || !channel || link.control !== "incoming" || !link.activeId) return;
-    link.assemblers = new Map();
+    const limits = liveLimits();
+    const next = new Map<string, FileAssembler | StreamAssembler>();
+    const opened: StreamAssembler[] = [];
+    try {
+      if (limits.v2) {
+        for (const file of manifest.files) {
+          let sink: ByteSink | undefined;
+          if (file.size > MAX_FILE_BYTES) {
+            sink = (await deps.openSink?.(file)) ?? undefined;
+            if (!sink) {
+              for (const assembler of opened) await assembler.abort();
+              show("confirm", t("transfer.needSink"));
+              return;
+            }
+          }
+          const assembler = new StreamAssembler({ id: file.id, size: file.size, sink });
+          next.set(file.id, assembler);
+          opened.push(assembler);
+        }
+      } else {
+        for (const file of manifest.files) {
+          next.set(file.id, new FileAssembler({ id: file.id, size: file.size }));
+        }
+      }
+    } catch {
+      for (const assembler of opened) await assembler.abort();
+      fail(t("transfer.failed"));
+      return;
+    }
+    link.assemblers = next;
     link.textAssembler = null;
     link.filesDone = new Set();
     link.got = 0;
+    link.pendingDigest = null;
     for (const file of manifest.files) {
-      link.assemblers.set(file.id, new FileAssembler({ id: file.id, size: file.size }));
       if (file.size === 0) link.filesDone.add(file.id);
     }
     link.textDone = manifest.textBytes === 0;
@@ -541,6 +691,7 @@ export function createLanSession(deps: LanDeps) {
     show("receiving");
     finishReceive();
   }
+
 
   function reject() {
     const link = linkRef.current;

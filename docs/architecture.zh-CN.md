@@ -237,8 +237,8 @@ flowchart LR
 | `RECONNECT_GRACE_MS`（10 分钟）内没恢复 | 客户端放弃，或服务器闹钟向还连着的一端发 `peer-left`（`reason: "gone"`）。清空会话，保留没保存的文件，给出提示 |
 | 服务器空闲 / 硬上限过期 | 照旧（`ROOM_TTL_MS` 空闲 10 分钟，`MAX_SESSION_MS` 2 小时）。已配对的一端掉线时，`markAbsent` 把房间过期时间推到至少重连窗口加 1 分钟（不超过硬上限），空闲过期不会先结束房间 |
 
-限额（`src/lib/transfer/limits.ts`）：单文件 32 MiB（`MAX_FILE_BYTES`），整批 64 MiB（`MAX_BATCH_BYTES`），最多 8 个文件（`MAX_FILES`），文字 32 KiB（`MAX_TEXT_BYTES`）。
+限额（`src/lib/transfer/limits.ts`）：任一方未声明 stream-v2 时，单文件 32 MiB（`MAX_FILE_BYTES`），整批 64 MiB（`MAX_BATCH_BYTES`），最多 8 个文件（`MAX_FILES`），文字 32 KiB（`MAX_TEXT_BYTES`）。两端都在 SDP 里声明 `a=x-droprevive:stream-v2` 时（只通过这个能力协商，绝不向旧端发送新的 JSON），单文件和整批上限为 1 GiB（`V2_MAX_FILE_BYTES`、`V2_MAX_BATCH_BYTES`），Safari 收紧到 512 MiB，iOS 到 256 MiB，取两端更严的那个。v2 用带 8 字节偏移、更大载荷的 `0xc3` 帧（`CHUNK_BYTES_V2`）发送，发送端按 `File.slice` 读盘，并设置 `bufferedAmountLowThreshold`。接收端边收边写，不预分配整文件。同一页面 10 分钟内（`RECONNECT_GRACE_MS`）重连可从已收到的字节继续。每个文件做流式 SHA-256 校验。文字仍走 v1 的 `0xc2` 帧和 32 KiB 上限。
 
-内存：收到的文件以字节形式存在 store 里，直到保存或「移除」；缩略图（Blob URL）在保存、移除和会话结束时释放；没保存的超过 128 MiB（`UNSAVED_WARN_BYTES`）时提醒一次；时间线最多 200 条（`MAX_TIMELINE`），进行中的批次和含未保存文件的批次不会被删。
+内存：不超过 32 MiB 的收到文件以字节形式存在 store 里，直到保存或「移除」；超过 32 MiB 的文件边收边写入用户选择的路径（或源私有文件系统），不以整文件 Blob 留在页面里。缩略图（Blob URL）在保存、移除和会话结束时释放；没保存的超过 128 MiB（`UNSAVED_WARN_BYTES`）时提醒一次；时间线最多 200 条（`MAX_TIMELINE`），进行中的批次和含未保存文件的批次不会被删。
 
 限制：手机浏览器可能冻结后台标签页并断开 WebRTC。在重连窗口内，回到前台会恢复；系统也可能直接结束标签页，这时没有 bye，对方要等满窗口。

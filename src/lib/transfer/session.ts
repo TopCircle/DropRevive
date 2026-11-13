@@ -1,7 +1,8 @@
-import { CONNECT_TIMEOUT_MS, ICE_TIMEOUT_MS } from "./limits.ts";
+import { BUFFERED_LOW, CONNECT_TIMEOUT_MS, ICE_TIMEOUT_MS } from "./limits.ts";
 import { emptyNegotiation, emptyOutbox, flushHeld, noteSignal, rememberAnswer, stageOutgoing, type HeldOutbox, type NegState } from "./negotiation.ts";
 import type { IceInit, SignalPayload } from "./protocol.ts";
 import { PEER_CONFIG } from "./ice.ts";
+import { attachStreamCap, detectStreamPlat, parseStreamCap, type StreamPlat } from "./stream-cap.ts";
 
 export interface DataChannelLike {
   readyState: string;
@@ -12,6 +13,8 @@ export interface DataChannelLike {
   onmessage: ((event: { data: string | ArrayBuffer }) => void) | null;
   onclose: (() => void) | null;
   bufferedAmount?: number;
+  bufferedAmountLowThreshold?: number;
+  onbufferedamountlow?: (() => void) | null;
 }
 
 export interface PeerLike {
@@ -134,7 +137,11 @@ export async function connectSession(input: {
   onConnectionState?: (state: RTCPeerConnectionState | undefined, peer: PeerLike) => void;
   onChannel?: (channel: DataChannelLike) => void;
   onChannelClose?: () => void;
+  /** Fires when a remote offer or answer is applied; null means the peer is on the v1 protocol. */
+  onRemoteCap?: (cap: { v2: true; plat: StreamPlat } | null) => void;
+  plat?: StreamPlat;
 }): Promise<Session> {
+  const plat = input.plat ?? detectStreamPlat(typeof navigator !== "undefined" ? navigator.userAgent : "");
   let peer = input.createPeer({ ...PEER_CONFIG });
   let currentGen = 1;
   let neg: NegState = emptyNegotiation();
@@ -164,6 +171,7 @@ export async function connectSession(input: {
     if (channel && channel !== value) silenceChannel(channel);
     channel = value;
     value.binaryType = "arraybuffer";
+    value.bufferedAmountLowThreshold = BUFFERED_LOW;
     input.onChannel?.(value);
     value.onclose = () => {
       if (channel !== value) return;
@@ -247,8 +255,9 @@ export async function connectSession(input: {
   };
   if (input.role === "host") {
     const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    emit({ kind: "offer", sdp: offer.sdp || "", gen: 1, fresh: true });
+    const sdp = attachStreamCap(offer.sdp || "", plat);
+    await peer.setLocalDescription({ type: "offer", sdp });
+    emit({ kind: "offer", sdp, gen: 1, fresh: true });
     neg = { ...neg, pendingGen: 1 };
   }
   return {
@@ -289,19 +298,22 @@ export async function connectSession(input: {
         if ((decision.effect === "replace-peer" || decision.effect === "apply-offer") && payload.kind === "offer") {
           neg = decision.state;
           currentGen = payload.gen;
+          input.onRemoteCap?.(parseStreamCap(payload.sdp));
           await peer.setRemoteDescription({ type: "offer", sdp: payload.sdp });
           const answer = await peer.createAnswer();
-          await peer.setLocalDescription(answer);
+          const sdp = attachStreamCap(answer.sdp || "", plat);
+          await peer.setLocalDescription({ type: "answer", sdp });
           const queued = [...neg.queued, ...takeHeld(payload.gen)];
-          neg = { ...rememberAnswer(neg, answer.sdp || ""), remoteReady: true, queued: [] };
+          neg = { ...rememberAnswer(neg, sdp), remoteReady: true, queued: [] };
           for (const init of queued) await peer.addIceCandidate(init);
-          emit({ kind: "answer", sdp: answer.sdp || "", gen: payload.gen });
+          emit({ kind: "answer", sdp, gen: payload.gen });
           return;
         }
         if (decision.effect === "apply-answer" && payload.kind === "answer") {
           answerApplied = true;
           const queued = [...decision.state.queued, ...takeHeld(payload.gen)];
           neg = { ...decision.state, queued: [] };
+          input.onRemoteCap?.(parseStreamCap(payload.sdp));
           await peer.setRemoteDescription({ type: "answer", sdp: payload.sdp });
           for (const init of queued) await peer.addIceCandidate(init);
         }
@@ -315,13 +327,15 @@ export async function connectSession(input: {
           const next = input.createPeer({ ...PEER_CONFIG });
           beginGeneration({ gen, fresh: true, peer: next });
           const offer = await next.createOffer();
-          await next.setLocalDescription(offer);
-          emit({ kind: "offer", sdp: offer.sdp || "", gen, fresh: true });
+          const sdp = attachStreamCap(offer.sdp || "", plat);
+          await next.setLocalDescription({ type: "offer", sdp });
+          emit({ kind: "offer", sdp, gen, fresh: true });
         } else {
           beginGeneration({ gen, fresh: false });
           const offer = await peer.createOffer({ iceRestart: true });
-          await peer.setLocalDescription(offer);
-          emit({ kind: "offer", sdp: offer.sdp || "", gen, fresh: false });
+          const sdp = attachStreamCap(offer.sdp || "", plat);
+          await peer.setLocalDescription({ type: "offer", sdp });
+          emit({ kind: "offer", sdp, gen, fresh: false });
         }
       } catch {
         return;

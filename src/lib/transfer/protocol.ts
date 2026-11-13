@@ -1,5 +1,5 @@
 import { isRoomCode } from "./code.ts";
-import { CODE_ALPHABET, CODE_LENGTH, MAX_BATCH_BYTES, MAX_CONTROL_JSON, MAX_FILE_BYTES, MAX_FILES, MAX_SIGNAL_JSON, MAX_TEXT_BYTES } from "./limits.ts";
+import { CHUNK_BYTES, CHUNK_BYTES_V2, CODE_ALPHABET, CODE_LENGTH, MAX_BATCH_BYTES, MAX_CONTROL_JSON, MAX_FILE_BYTES, MAX_FILES, MAX_SIGNAL_JSON, MAX_TEXT_BYTES, V2_MAX_BATCH_BYTES, V2_MAX_FILE_BYTES, V2_MAX_FILES } from "./limits.ts";
 
 export type IceInit = {
   candidate: string;
@@ -19,7 +19,35 @@ export type ControlMessage =
   | { t: "manifest"; id: string; textBytes: number; files: ManifestFile[] }
   | { t: "accept"; id: string }
   | { t: "reject"; id: string }
-  | { t: "complete"; id: string };
+  | { t: "complete"; id: string }
+  /** v2 only: never sent to a peer that did not advertise stream-v2 in SDP. */
+  | { t: "resume"; id: string; files: { id: string; offset: number }[] }
+  | { t: "digest"; id: string; files: { id: string; sha256: string }[] };
+
+export type ControlLimits = {
+  maxTextBytes: number;
+  maxFiles: number;
+  maxFileBytes: number;
+  maxBatchBytes: number;
+  /** When false, resume and digest messages are rejected (old-client behaviour). */
+  v2: boolean;
+};
+
+export const V1_CONTROL_LIMITS: ControlLimits = {
+  maxTextBytes: MAX_TEXT_BYTES,
+  maxFiles: MAX_FILES,
+  maxFileBytes: MAX_FILE_BYTES,
+  maxBatchBytes: MAX_BATCH_BYTES,
+  v2: false,
+};
+
+export const V2_CONTROL_LIMITS: ControlLimits = {
+  maxTextBytes: MAX_TEXT_BYTES,
+  maxFiles: V2_MAX_FILES,
+  maxFileBytes: V2_MAX_FILE_BYTES,
+  maxBatchBytes: V2_MAX_BATCH_BYTES,
+  v2: true,
+};
 
 export type ClientSignal =
   | { type: "hello"; token: string; deviceName: string }
@@ -129,16 +157,79 @@ function decodeFrame(frame: Uint8Array, magic: number): { id: string; offset: nu
   if ([...id].some((char) => !CODE_ALPHABET.includes(char))) return null;
   const offset = new DataView(frame.buffer, frame.byteOffset + 2 + idLength, 4).getUint32(0);
   const bytes = frame.subarray(6 + idLength);
-  if (bytes.byteLength < 1 || bytes.byteLength > 8 * 1024) return null;
+  if (bytes.byteLength < 1 || bytes.byteLength > CHUNK_BYTES) return null;
   return { id, offset, bytes };
 }
+
+const MAGIC_FILE_V2 = 0xc3;
+
+function setUint64(view: DataView, at: number, value: number): void {
+  view.setUint32(at, Math.floor(value / 0x1_0000_0000));
+  view.setUint32(at + 4, value >>> 0);
+}
+
+function getUint64(view: DataView, at: number): number {
+  return view.getUint32(at) * 0x1_0000_0000 + view.getUint32(at + 4);
+}
+
+export function encodeChunkV2(chunk: { id: string; offset: number; bytes: Uint8Array }): Uint8Array {
+  const idBytes = encoder.encode(chunk.id);
+  const frame = new Uint8Array(1 + 1 + idBytes.length + 8 + chunk.bytes.length);
+  frame[0] = MAGIC_FILE_V2;
+  frame[1] = idBytes.length;
+  frame.set(idBytes, 2);
+  setUint64(new DataView(frame.buffer, frame.byteOffset, frame.byteLength), 2 + idBytes.length, chunk.offset);
+  frame.set(chunk.bytes, 10 + idBytes.length);
+  return frame;
+}
+
+export function decodeChunkV2(frame: Uint8Array): { id: string; offset: number; bytes: Uint8Array } | null {
+  if (frame.byteLength < 11 || frame[0] !== MAGIC_FILE_V2) return null;
+  const idLength = frame[1]!;
+  if (idLength < 1 || idLength > 8 || frame.byteLength < 10 + idLength) return null;
+  const id = decoder.decode(frame.subarray(2, 2 + idLength));
+  if ([...id].some((char) => !CODE_ALPHABET.includes(char))) return null;
+  const offset = getUint64(new DataView(frame.buffer, frame.byteOffset + 2 + idLength, 8), 0);
+  if (!Number.isInteger(offset) || offset < 0) return null;
+  const bytes = frame.subarray(10 + idLength);
+  if (bytes.byteLength < 1 || bytes.byteLength > CHUNK_BYTES_V2) return null;
+  return { id, offset, bytes };
+}
+
+export const FILE_MAGIC_V2 = MAGIC_FILE_V2;
 
 function exactKeys(value: object, keys: string[]): boolean {
   const own = Object.keys(value);
   return own.length === keys.length && keys.every((key) => own.includes(key));
 }
 
-export function decodeControl(raw: string): ControlMessage | null {
+function decodeOffsetList(
+  files: unknown,
+  limits: ControlLimits,
+  field: "offset" | "sha256",
+): { id: string; offset: number }[] | { id: string; sha256: string }[] | null {
+  if (!Array.isArray(files) || files.length > limits.maxFiles) return null;
+  const out: { id: string; offset?: number; sha256?: string }[] = [];
+  for (const item of files) {
+    if (!item || typeof item !== "object") return null;
+    if (field === "offset") {
+      if (!exactKeys(item, ["id", "offset"])) return null;
+      const row = item as { id: unknown; offset: unknown };
+      if (typeof row.id !== "string" || row.id.length !== CODE_LENGTH || [...row.id].some((char) => !CODE_ALPHABET.includes(char))) return null;
+      if (typeof row.offset !== "number" || !Number.isInteger(row.offset) || row.offset < 0 || row.offset > limits.maxFileBytes) return null;
+      out.push({ id: row.id, offset: row.offset });
+    } else {
+      if (!exactKeys(item, ["id", "sha256"])) return null;
+      const row = item as { id: unknown; sha256: unknown };
+      if (typeof row.id !== "string" || row.id.length !== CODE_LENGTH || [...row.id].some((char) => !CODE_ALPHABET.includes(char))) return null;
+      if (typeof row.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(row.sha256)) return null;
+      out.push({ id: row.id, sha256: row.sha256 });
+    }
+  }
+  return out as { id: string; offset: number }[] & { id: string; sha256: string }[];
+}
+
+export function decodeControl(raw: string, limits: ControlLimits = V1_CONTROL_LIMITS): ControlMessage | null {
   if (encoder.encode(raw).byteLength > MAX_CONTROL_JSON) return null;
   let parsed: unknown;
   try {
@@ -152,10 +243,22 @@ export function decodeControl(raw: string): ControlMessage | null {
     if (!exactKeys(message, ["t", "id"]) || typeof message.id !== "string" || !isRoomCode(message.id)) return null;
     return { t: message.t, id: message.id };
   }
+  if (message.t === "resume" || message.t === "digest") {
+    if (!limits.v2) return null;
+    if (!exactKeys(message, ["t", "id", "files"]) || typeof message.id !== "string" || !isRoomCode(message.id)) return null;
+    if (message.t === "resume") {
+      const files = decodeOffsetList(message.files, limits, "offset") as { id: string; offset: number }[] | null;
+      if (!files) return null;
+      return { t: "resume", id: message.id, files };
+    }
+    const files = decodeOffsetList(message.files, limits, "sha256") as { id: string; sha256: string }[] | null;
+    if (!files) return null;
+    return { t: "digest", id: message.id, files };
+  }
   if (message.t !== "manifest" || !exactKeys(message, ["t", "id", "textBytes", "files"])) return null;
   if (typeof message.id !== "string" || !isRoomCode(message.id)) return null;
-  if (typeof message.textBytes !== "number" || !Number.isInteger(message.textBytes) || message.textBytes < 0 || message.textBytes > MAX_TEXT_BYTES) return null;
-  if (!Array.isArray(message.files) || message.files.length > MAX_FILES) return null;
+  if (typeof message.textBytes !== "number" || !Number.isInteger(message.textBytes) || message.textBytes < 0 || message.textBytes > limits.maxTextBytes) return null;
+  if (!Array.isArray(message.files) || message.files.length > limits.maxFiles) return null;
   const files: ManifestFile[] = [];
   for (const item of message.files) {
     if (!item || typeof item !== "object" || !exactKeys(item, ["id", "name", "size", "mime"])) return null;
@@ -163,10 +266,10 @@ export function decodeControl(raw: string): ControlMessage | null {
     if (file.id.length !== CODE_LENGTH || [...file.id].some((char) => !CODE_ALPHABET.includes(char))) return null;
     if (typeof file.name !== "string" || file.name.length < 1 || file.name.length > 120) return null;
     if (typeof file.mime !== "string" || file.mime.length > 100) return null;
-    if (typeof file.size !== "number" || !Number.isInteger(file.size) || file.size < 0 || file.size > MAX_FILE_BYTES) return null;
+    if (typeof file.size !== "number" || !Number.isInteger(file.size) || file.size < 0 || file.size > limits.maxFileBytes) return null;
     files.push({ id: file.id, name: file.name, size: file.size, mime: file.mime });
   }
   const batch = files.reduce((sum, file) => sum + file.size, message.textBytes);
-  if (batch > MAX_BATCH_BYTES) return null;
+  if (batch > limits.maxBatchBytes) return null;
   return { t: "manifest", id: message.id, textBytes: message.textBytes, files };
 }
