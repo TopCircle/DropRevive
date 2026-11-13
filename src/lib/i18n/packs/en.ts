@@ -72,6 +72,7 @@ export const en: LanguagePack = {
     "preview.close": "Close",
     "preview.loading": "Fetching…",
     "preview.unsupported": "This format cannot be opened here. Download it instead.",
+    "preview.tooLarge": "This file is too large to preview here. Download it instead.",
     "preview.copy": "Copy",
     "preview.download": "Download",
     "preview.delete": "Delete",
@@ -352,5 +353,6 @@ export const en: LanguagePack = {
     "err.offlineFile": "You are offline, and this file is not cached on this device.",
     "err.providerNoDownload": "{label} is not connected, so this file cannot be downloaded.",
     "err.download": "Download failed.",
+    "err.googleLargeNoStream": "This file is too large to download in this browser. Try Chrome or Edge on a computer, or download it from OneDrive.",
   },
 };

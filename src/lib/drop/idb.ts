@@ -87,8 +87,11 @@ export async function replaceItems(items: DropRecord[]): Promise<void> {
   });
 }
 
+/** Whole-file Blob cache stops above this size (~32 MiB). Larger files are streamed to disk. */
+export const CACHE_BLOB_MAX_BYTES = 32 * 1024 * 1024;
+
 export async function cacheBlob(key: string, blob: Blob): Promise<void> {
-  if (blob.size > 10 * 1024 * 1024) return;
+  if (blob.size > CACHE_BLOB_MAX_BYTES) return;
   try {
     await idbSet("blobs", key, blob);
   } catch {

@@ -219,14 +219,30 @@ export async function removeMicrosoftShelf(token: string, shelf: string): Promis
   return true;
 }
 
+/** Accepts only an https @microsoft.graph.downloadUrl. */
+export function parseMicrosoftDownloadUrl(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const url = (payload as { "@microsoft.graph.downloadUrl"?: unknown })["@microsoft.graph.downloadUrl"];
+  if (typeof url !== "string") return null;
+  try {
+    if (new URL(url).protocol !== "https:") return null;
+  } catch {
+    return null;
+  }
+  return url;
+}
+
+export async function microsoftDownloadUrl(token: string, itemId: string): Promise<string> {
+  return downloadUrl(token, itemId);
+}
+
 async function downloadUrl(token: string, itemId: string): Promise<string> {
   const { status, text } = await apiFetch(
     `${GRAPH}/me/drive/items/${itemId}?select=id,@microsoft.graph.downloadUrl`,
     token,
   );
   assertOk("microsoft", status, text);
-  const json = parseJson<{ "@microsoft.graph.downloadUrl"?: string }>(text);
-  const url = json?.["@microsoft.graph.downloadUrl"];
+  const url = parseMicrosoftDownloadUrl(parseJson(text));
   if (!url) throw new CloudError(t("err.msNoUrl"));
   return url;
 }

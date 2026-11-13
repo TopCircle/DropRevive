@@ -6,6 +6,12 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
+### 中文
+- **云盘下载改为边下边存**：OneDrive 把临时下载链接交给浏览器，不再整文件读进内存。Google Drive 优先用「另存为」流式写入，否则通过本站 Service Worker 流式下载（令牌经 postMessage 传递，不放进网址）；Safari 与 iOS 不用这条 Service Worker 路径。超过约 32 MiB 的文件不再写入 IndexedDB，也不能在页面里整文件预览；在不能流式保存的浏览器里，大文件会提示换用 Chrome 或 Edge，或改从 OneDrive 下载。
+
+### English
+- **Cloud downloads now stream to disk**: OneDrive hands its temporary download URL to the browser and no longer reads the whole file into memory. Google Drive prefers a “Save as” streaming write, then a same-origin Service Worker stream (token via postMessage, never in the URL); Safari and iOS skip that Service Worker path. Files over about 32 MiB are no longer written to IndexedDB and are not previewed as a whole-file Blob. Browsers that cannot stream a large Google file to disk show a prompt to use Chrome or Edge, or to download from OneDrive instead.
+
 ## [1.3.0] - 2026-11-12
 
 已于 2026-11-12 部署到正式站。 / Deployed to the production site on 2026-11-12.

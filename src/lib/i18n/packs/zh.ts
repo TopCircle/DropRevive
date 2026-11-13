@@ -66,6 +66,7 @@ export const zhMessages = {
   "preview.close": "关闭",
   "preview.loading": "正在取用…",
   "preview.unsupported": "这个格式不能在页面里打开，可以下载。",
+  "preview.tooLarge": "文件比较大，页面里不能直接打开，请下载后查看。",
   "preview.copy": "复制",
   "preview.download": "下载",
   "preview.delete": "删除",
@@ -346,6 +347,7 @@ export const zhMessages = {
   "err.offlineFile": "网络断开了，这份文件还没缓存在这台设备上。",
   "err.providerNoDownload": "{label} 还没连接，下不了这个文件。",
   "err.download": "文件下载失败。",
+  "err.googleLargeNoStream": "这个文件比较大，当前浏览器不能边下边保存。请换用电脑上的 Chrome 或 Edge，或把文件放到 OneDrive 后再下载。",
 } as const;
 
 export type MessageKey = keyof typeof zhMessages;

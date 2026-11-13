@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { googleConfigured, microsoftConfigured } from "@/lib/drop/client-env";
 import { formatWhen } from "@/lib/drop/format";
 import { useI18n } from "@/lib/i18n";
+import { isTooLargeToPreview } from "@/lib/drop/download";
 import { itemBlob, mimeOf, useDropStore } from "@/lib/drop/store";
 import { cn } from "@/lib/utils";
 import { searchInView, viewKey, viewResults, type DesktopSearch } from "@/lib/drop/desktop-search";
@@ -136,7 +137,7 @@ export function Thumb({ item, className = "", onOpen }: { item: DropRecord; clas
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch only when the file itself changes
   }, [item.id, blobId]);
-  if (failed) return null;
+  if (failed || isTooLargeToPreview(item)) return null;
   return (
     <div
       ref={box}
