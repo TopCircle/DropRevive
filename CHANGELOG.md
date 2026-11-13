@@ -7,9 +7,11 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 ## [Unreleased]
 
 ### 中文
+- **点对点直传改为边发边写、可续传**：两端都是新版本时，单文件和整批上限为 1 GB（Safari 512 MiB，iOS 256 MiB），用更大的分块和 8 字节偏移发送；发送端按 `File.slice` 读盘，接收端边收边写、不预分配整文件；同一页面 10 分钟内重连可从断点继续，并按文件做流式 SHA-256 校验。任一方仍是旧版本时，限额和协议保持原来的 32 / 64 MiB、最多 8 个文件，也不会向旧端发送新的 JSON。
 - **云盘下载改为边下边存**：OneDrive 把临时下载链接交给浏览器，不再整文件读进内存。Google Drive 优先用「另存为」流式写入，否则通过本站 Service Worker 流式下载（令牌经 postMessage 传递，不放进网址）；Safari 与 iOS 不用这条 Service Worker 路径。超过约 32 MiB 的文件不再写入 IndexedDB，也不能在页面里整文件预览；在不能流式保存的浏览器里，大文件会提示换用 Chrome 或 Edge，或改从 OneDrive 下载。
 
 ### English
+- **P2P transfer now streams to disk and can resume**: when both sides are current, the cap is 1 GB per file and per batch (512 MiB on Safari, 256 MiB on iOS), sent in larger frames with 8-byte offsets. The sender reads with `File.slice`; the receiver writes as bytes arrive and does not pre-allocate the file. A drop in the same tab can resume within 10 minutes, and each file is checked with a streaming SHA-256 digest. If either side is on the previous version, the original 32 / 64 MiB / 8-file caps and protocol stay in force, and no new JSON is sent to the old client.
 - **Cloud downloads now stream to disk**: OneDrive hands its temporary download URL to the browser and no longer reads the whole file into memory. Google Drive prefers a “Save as” streaming write, then a same-origin Service Worker stream (token via postMessage, never in the URL); Safari and iOS skip that Service Worker path. Files over about 32 MiB are no longer written to IndexedDB and are not previewed as a whole-file Blob. Browsers that cannot stream a large Google file to disk show a prompt to use Chrome or Edge, or to download from OneDrive instead.
 
 ## [1.3.0] - 2026-11-12

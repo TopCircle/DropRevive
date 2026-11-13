@@ -39,6 +39,10 @@ export function onRemoteControl(live: LiveControl, message: ControlMessage): { n
     if (live.state === "outgoing" && message.id === live.id) return { next: ready, action: "declined" };
     return { next: live, action: "ignore" };
   }
-  if (live.state === "sending" && message.id === live.id) return { next: ready, action: "finished" };
+  if (message.t === "complete") {
+    if (live.state === "sending" && message.id === live.id) return { next: ready, action: "finished" };
+    return { next: live, action: "ignore" };
+  }
+  // resume and digest are handled by the session, never as a batch completion.
   return { next: live, action: "ignore" };
 }

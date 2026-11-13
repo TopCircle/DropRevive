@@ -14,8 +14,18 @@ export const MAX_FILES = 8;
 export const MAX_FILE_BYTES = 32 * 1024 * 1024;
 export const MAX_BATCH_BYTES = 64 * 1024 * 1024;
 export const CHUNK_BYTES = 8 * 1024;
+/** v2 payload per frame; still capped by the channel's maxMessageSize. */
+export const CHUNK_BYTES_V2 = 64 * 1024;
 export const ASSUMED_MAX_MESSAGE = 16 * 1024;
 export const BUFFERED_HIGH = 1024 * 1024;
+/** Fire onbufferedamountlow here so the sender can refill before the buffer drains. */
+export const BUFFERED_LOW = 256 * 1024;
+/** v2 peers: 1 GiB per file and per batch, unless a tighter platform cap applies. */
+export const V2_MAX_FILES = 8;
+export const V2_MAX_FILE_BYTES = 1024 * 1024 * 1024;
+export const V2_MAX_BATCH_BYTES = 1024 * 1024 * 1024;
+export const V2_MAX_FILE_SAFARI_BYTES = 512 * 1024 * 1024;
+export const V2_MAX_FILE_IOS_BYTES = 256 * 1024 * 1024;
 export const ICE_TIMEOUT_MS = 12_000;
 export const CONNECT_TIMEOUT_MS = 20_000;
 export const MAX_HTTP_BODY = 512;

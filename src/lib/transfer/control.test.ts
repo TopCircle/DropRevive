@@ -47,3 +47,13 @@ test("a completed send returns to ready and a busy peer rejects a new offer", ()
   assert.equal(onRemoteControl({ state: "receiving", id: "BBBBBBBB" }, manifest).action, "reject-theirs");
   assert.equal(onRemoteControl({ state: "incoming", id: "AAAAAAAA" }, manifest).action, "reject-theirs");
 });
+
+test("resume and digest do not complete a send (v2 messages are handled elsewhere)", () => {
+  const sending = { state: "sending" as const, id: "BBBBBBBB" };
+  const resume = onRemoteControl(sending, { t: "resume", id: "BBBBBBBB", files: [{ id: "ABCDEFGH", offset: 10 }] });
+  assert.equal(resume.action, "ignore");
+  assert.deepEqual(resume.next, sending);
+  const digest = onRemoteControl(sending, { t: "digest", id: "BBBBBBBB", files: [{ id: "ABCDEFGH", sha256: "a".repeat(64) }] });
+  assert.equal(digest.action, "ignore");
+  assert.deepEqual(digest.next, sending);
+});

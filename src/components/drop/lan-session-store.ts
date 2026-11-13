@@ -9,6 +9,7 @@ import { useDropStore } from "@/lib/drop/store";
 import { formatBytes } from "@/lib/drop/format";
 import { t } from "@/lib/i18n";
 import { createLanSession, type LanSession, type LanState } from "@/lib/transfer/lan-session";
+import { openReceiveSink } from "@/lib/transfer/receive-sink";
 import { createLanLink } from "@/lib/transfer/link";
 import { unsavedSummary } from "@/lib/transfer/session-state";
 
@@ -44,6 +45,7 @@ export function lanSession(): LanSession {
     formatBytes,
     createObjectURL: (source) => URL.createObjectURL(source),
     revokeObjectURL: (url) => URL.revokeObjectURL(url),
+    openSink: (file) => openReceiveSink(file),
   });
   if (typeof window !== "undefined") wireTab(session);
   return session;
