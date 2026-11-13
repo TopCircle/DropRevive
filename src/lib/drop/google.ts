@@ -517,19 +517,29 @@ export async function uploadGoogleFile(input: {
   throw new CloudError(t("err.googleLargeDone"));
 }
 
-export async function downloadGoogleBlob(token: string, fileId: string): Promise<Blob> {
+export function googleMediaUrl(fileId: string): string {
+  return `${DRIVE}/files/${fileId}?alt=media`;
+}
+
+/** Fetch alt=media and leave the body as a stream. Renews the token once on 401. */
+export async function openGoogleMedia(token: string, fileId: string): Promise<Response> {
   const load = (access: string) =>
-    fetch(`${DRIVE}/files/${fileId}?alt=media`, { headers: { Authorization: `Bearer ${access}` } });
+    fetch(googleMediaUrl(fileId), { headers: { Authorization: `Bearer ${access}` } });
+  let response = await load(token);
+  if (response.status === 401) {
+    const next = await renewToken("google", token);
+    response = await load(next);
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    assertOk("google", response.status, text);
+  }
+  return response;
+}
+
+export async function downloadGoogleBlob(token: string, fileId: string): Promise<Blob> {
   try {
-    let response = await load(token);
-    if (response.status === 401) {
-      token = await renewToken("google", token);
-      response = await load(token);
-    }
-    if (!response.ok) {
-      const text = await response.text();
-      assertOk("google", response.status, text);
-    }
+    const response = await openGoogleMedia(token, fileId);
     return await response.blob();
   } catch (error) {
     if (error instanceof CloudError) throw error;

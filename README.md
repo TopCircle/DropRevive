@@ -33,7 +33,7 @@ The session belongs to the browser tab, not the P2P Transfer page: you can switc
 
 What works today:
 
-- Send text and files; download, preview, and filter from any connected drive. Cloud uploads over 5 MB (Google Drive) or 4 MB (OneDrive) go in sequential ~8 MiB chunks and can resume a failed chunk in the same page session; a page refresh or a cancelled upload starts over. Cloud downloads still load the whole file into memory.
+- Send text and files; download, preview, and filter from any connected drive. Cloud uploads over 5 MB (Google Drive) or 4 MB (OneDrive) go in sequential ~8 MiB chunks and can resume a failed chunk in the same page session; a page refresh or a cancelled upload starts over. Cloud downloads stream to disk: OneDrive hands a temporary URL to the browser; Google Drive uses a “Save as” stream or a same-origin Service Worker (Safari and iOS skip that path). Files over about 32 MiB are not cached in IndexedDB and are not previewed as a whole-file Blob.
 - Background sync and manual "Sync now". Incomplete listing does not wipe existing local history.
 - Chinese and English; light / dark / system theme; device name.
 - Install as a PWA. The installed icon and the browser tab icon are two different assets.

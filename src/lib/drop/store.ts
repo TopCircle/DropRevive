@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { create } from "zustand";
 import { t } from "@/lib/i18n";
+import { defaultIo, defaultHost, saveCloudFile, isTooLargeToPreview } from "./download";
 import { asCloudError } from "./errors";
 import { GOOGLE_CLIENT_ID, MS_CLIENT_ID } from "./client-env";
 import { driveLogout, onRenewal } from "./drive-token";
@@ -244,13 +245,12 @@ export const useDropStore = create<DropState>((set, get) => ({
   remove: (ids) => removeItems(ids, set, get),
 
   download: async (item) => {
-    const blob = await fetchBlob(item, get);
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = item.fileName || `droprevive-${item.id}`;
-    anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    await saveCloudFile(
+      item,
+      (provider) => (provider === "google" ? get().google?.accessToken : get().microsoft?.accessToken),
+      defaultHost(),
+      defaultIo(get),
+    );
   },
 
   openPreview: async (item) => {
@@ -259,6 +259,11 @@ export const useDropStore = create<DropState>((set, get) => ({
       set({
         preview: { item, loading: false, text: item.text || "", mode: "text" },
       });
+      return;
+    }
+    // Large files must not be pulled in as a single Blob just to preview them.
+    if (isTooLargeToPreview(item)) {
+      set({ preview: { item, loading: false, mode: "other" } });
       return;
     }
     const mime = mimeOf(item);

@@ -195,7 +195,7 @@ flowchart TB
 
 云端上传由浏览器直接发到 Google Drive 或 Microsoft Graph（`google.ts`、`microsoft.ts`，共用辅助在 `upload-retry.ts`）。不超过 5 MB 的 Google 文件走一次 `uploadType=multipart`，不超过 4 MB 的 OneDrive 文件走简单上传；更大的文件先开可恢复会话，再按分块顺序 PUT：Google 每块 8 MiB（256 KiB 的倍数），OneDrive 每块 320 KiB × 26（约 8.13 MiB），最后一块可以不足整块。某一片失败时向服务端查询已收进度并从该偏移续传（Google：空 PUT，带 `Content-Range: bytes */total`，期望 308 和 Range 头；OneDrive：GET `uploadUrl` 取 `nextExpectedRanges`）。只重试网络错误、5xx 和 429（最多 3 次，从 300 ms 起指数退避），单片超时 180 秒、无进度卡死检测 30 秒；其他 4xx 不会盲目重试。401 会刷新访问令牌再试一次，Google 大文件分块和 OneDrive 简单上传也包括在内。进度单调前进（重传时不会退回 0）。刷新页面或取消后不能从断点恢复。用户可见的大小上限不变。
 
-云盘下载仍是把整个文件作为 `Blob` 载入内存（`downloadGoogleBlob` / `downloadMicrosoftBlob` 调用 `response.blob()`），再写入 IndexedDB 缓存。
+云盘下载改为边下边存，大文件不再作为单个 `Blob` 载入内存。OneDrive 先解析 `@microsoft.graph.downloadUrl`（`microsoft.ts` 的 `microsoftDownloadUrl`），再把这条已授权的 https 链接交给浏览器，不再调用 `response.blob()`。Google Drive（`download.ts`，`google.ts` 的 `openGoogleMedia`）在浏览器支持时用 `showSaveFilePicker` 流式写入，否则走本站 Service Worker 在 `/__drive-download/` 的流式下载（`public/sw.js`）：文件体通过 `postMessage` 转移，退而求其次时令牌也走 `postMessage`，绝不放进网址。Safari 与 iOS 不用这条 Service Worker 路径（该平台上流式下载不可靠），可以改走源私有文件系统再唤起分享；两条路都不可用时拒绝下载，而不是把整个大文件载入内存。不超过 32 MiB 的文件仍可走 Blob 路径。超过 32 MiB 的文件不再写入 IndexedDB，也不能在页面里整文件预览。
 
 ## 6. 点对点直传：HTTP 入口和页面内扫码器
 

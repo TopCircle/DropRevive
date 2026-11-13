@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { DeleteItem, FolderPicker } from "@/components/drop/desktop-shell";
 import { Button } from "@/components/ui/button";
+import { isTooLargeToPreview } from "@/lib/drop/download";
 import { formatWhen } from "@/lib/drop/format";
 import { useDropStore } from "@/lib/drop/store";
 import { PROVIDER_LABEL } from "@/lib/drop/types";
@@ -53,7 +54,9 @@ export function PreviewStage({ onClose, onDeleted }: { onClose?: () => void; onD
         <iframe title={item.fileName || t("preview.pdf")} src={preview.url} className="h-full min-h-80 w-full rounded-xl bg-background" />
       )}
       {preview.mode === "other" && !preview.loading && (
-        <p className="text-sm text-muted-foreground">{t("preview.unsupported")}</p>
+        <p className="text-sm text-muted-foreground">
+          {isTooLargeToPreview(item) ? t("preview.tooLarge") : t("preview.unsupported")}
+        </p>
       )}
       <p className="text-xs text-muted-foreground">
         {[formatWhen(item.createdAt), item.deviceName || t("bubble.unknownDevice"), where].filter(Boolean).join(" · ")}
