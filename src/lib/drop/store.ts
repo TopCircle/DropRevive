@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { create } from "zustand";
 import { t } from "@/lib/i18n";
-import { defaultIo, defaultHost, saveCloudFile, isTooLargeToPreview } from "./download";
+import { defaultIo, defaultHost, isTooLargeToPreview, runDownload } from "./download";
 import { asCloudError } from "./errors";
 import { GOOGLE_CLIENT_ID, MS_CLIENT_ID } from "./client-env";
 import { driveLogout, onRenewal } from "./drive-token";
@@ -32,6 +32,7 @@ import {
   providersToRefresh,
   readAuthReturn,
   SESSION_CHECK_CAP_MS,
+  tokenFor as freshToken,
 } from "./store-session";
 import { applyTheme, INITIAL_SETTINGS, normalizeSettings } from "./store-settings";
 import { loadShelves, migrateFolders, saveShelves, shelfName } from "./store-shelves";
@@ -79,6 +80,7 @@ export const useDropStore = create<DropState>((set, get) => ({
   selecting: false,
   selected: [],
   preview: null,
+  downloadView: null,
   settingsOpen: false,
   authError: null,
   shelves: [],
@@ -244,14 +246,16 @@ export const useDropStore = create<DropState>((set, get) => ({
 
   remove: (ids) => removeItems(ids, set, get),
 
-  download: async (item) => {
-    await saveCloudFile(
+  download: (item) =>
+    runDownload({
       item,
-      (provider) => (provider === "google" ? get().google?.accessToken : get().microsoft?.accessToken),
-      defaultHost(),
-      defaultIo(get),
-    );
-  },
+      getView: () => get().downloadView,
+      setView: (downloadView) => set({ downloadView }),
+      tokenFor: (provider) => (provider === "google" ? get().google?.accessToken : get().microsoft?.accessToken),
+      renew: (provider) => freshToken(provider, get).then(() => undefined),
+      host: defaultHost(),
+      io: defaultIo(get),
+    }),
 
   openPreview: async (item) => {
     revokePreview();

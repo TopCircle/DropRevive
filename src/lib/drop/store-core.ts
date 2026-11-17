@@ -1,3 +1,4 @@
+import type { DownloadView } from "./download";
 import type { DateFilter, KindFilter } from "./meta";
 import type {
   DropRecord,
@@ -46,6 +47,8 @@ export type DropState = {
   selecting: boolean;
   selected: string[];
   preview: PreviewState | null;
+  /** The download both buttons share. Null when nothing is in progress, handed off, or failed. */
+  downloadView: DownloadView | null;
   settingsOpen: boolean;
   /** Error from the last sign-in round trip (the Worker sends it back as ?auth_error=…). */
   authError: AuthError | null;

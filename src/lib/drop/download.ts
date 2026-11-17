@@ -1,5 +1,6 @@
 import { t } from "@/lib/i18n";
 import { asCloudError, CloudError } from "./errors";
+import { formatBytes } from "./format";
 import { googleMediaUrl, openGoogleMedia } from "./google";
 import { CACHE_BLOB_MAX_BYTES } from "./idb";
 import { microsoftDownloadUrl } from "./microsoft";
@@ -28,6 +29,33 @@ export type DownloadMethod =
 
 export type TokenFor = (provider: ProviderId) => string | undefined;
 
+export type DownloadPhase = "progress" | "handed-off" | "error";
+
+/** What both download buttons render. `handed-off` is not a completed percent. */
+export type DownloadView = {
+  itemId: string;
+  phase: DownloadPhase;
+  loaded: number;
+  total: number | null;
+  error: string | null;
+};
+
+export type DownloadObserve = {
+  onProgress?: (loaded: number, total?: number) => void;
+  onHandoff?: () => void;
+};
+
+/** Text for the shared status line. Unknown totals stay a byte count, never a percent. */
+export function describeDownload(view: DownloadView): string {
+  if (view.phase === "handed-off") return t("download.handedOff");
+  if (view.phase === "error") return view.error || t("bubble.downloadFailed");
+  if (view.total && view.total > 0) {
+    return t("download.progress", { loaded: formatBytes(view.loaded), total: formatBytes(view.total) });
+  }
+  if (view.loaded > 0) return t("download.progressUnknown", { loaded: formatBytes(view.loaded) });
+  return t("download.working");
+}
+
 export type SavePickerHandle = {
   createWritable: () => Promise<WritableStream>;
 };
@@ -52,7 +80,7 @@ export type DownloadHost = {
   serviceWorker?: () => Promise<ServiceWorkerLike | null>;
   /** Test hook; the browser host talks to the Service Worker over a MessageChannel. */
   postToWorker?: (message: unknown, transfer: Transferable[]) => Promise<boolean>;
-  clickLink: (url: string, fileName: string, opts?: { newTab?: boolean }) => void;
+  clickLink: (url: string, fileName: string, opts?: { newTab?: boolean; downloadAttribute?: boolean }) => void;
   createObjectURL?: (blob: Blob) => string;
   revokeObjectURL?: (url: string) => void;
   getDirectory?: () => Promise<OpfsDir>;
@@ -64,7 +92,7 @@ export type DownloadHost = {
 export type DriveDownloadIo = {
   microsoftDownloadUrl: (token: string, itemId: string) => Promise<string>;
   openGoogleMedia: (token: string, fileId: string) => Promise<Response>;
-  fetchBlob: (item: DropRecord) => Promise<Blob>;
+  fetchBlob: (item: DropRecord, onProgress?: (loaded: number, total?: number) => void) => Promise<Blob>;
 };
 
 /** Safari and every iOS browser (all WebKit): Service Worker streaming downloads are unreliable. */
@@ -129,10 +157,12 @@ export function pickDownloadMethod(input: {
 }
 
 export function defaultHost(): DownloadHost {
-  const clickLink = (url: string, fileName: string, opts?: { newTab?: boolean }) => {
+  const clickLink = (url: string, fileName: string, opts?: { newTab?: boolean; downloadAttribute?: boolean }) => {
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = fileName;
+    // Chrome does not send <a download> through the page's service worker, so a
+    // same-origin stream URL must not set the attribute. Content-Disposition names the file.
+    if (opts?.downloadAttribute !== false) anchor.download = fileName;
     anchor.rel = "noopener";
     if (opts?.newTab) anchor.target = "_blank";
     anchor.style.display = "none";
@@ -155,15 +185,9 @@ export function defaultHost(): DownloadHost {
     origin: typeof location !== "undefined" ? location.origin : "",
     showSaveFilePicker: picker,
     serviceWorker: async () => {
-      if (typeof navigator === "undefined" || !navigator.serviceWorker) return null;
-      const asLike = (sw: ServiceWorker | null): ServiceWorkerLike | null =>
-        sw ? { postMessage: (message, transfer) => sw.postMessage(message, transfer) } : null;
-      if (navigator.serviceWorker.controller) return asLike(navigator.serviceWorker.controller);
-      const ready = navigator.serviceWorker.ready.then((reg) => asLike(reg.active));
-      const timeout = new Promise<null>((resolve) => {
-        setTimeout(() => resolve(null), 3000);
-      });
-      return (await Promise.race([ready, timeout])) ?? null;
+      if (typeof navigator === "undefined" || !navigator.serviceWorker?.controller) return null;
+      const sw = navigator.serviceWorker.controller;
+      return { postMessage: (message, transfer) => sw.postMessage(message, transfer) };
     },
     clickLink,
     createObjectURL: (blob) => URL.createObjectURL(blob),
@@ -185,9 +209,9 @@ export function defaultIo(get?: StoreGet): DriveDownloadIo {
   return {
     microsoftDownloadUrl,
     openGoogleMedia,
-    fetchBlob: (item) => {
+    fetchBlob: (item, onProgress) => {
       if (!get) throw new CloudError(t("err.download"));
-      return fetchBlob(item, get);
+      return fetchBlob(item, get, onProgress);
     },
   };
 }
@@ -228,20 +252,87 @@ function objectUrlFns(host: DownloadHost): {
   };
 }
 
-async function saveGoogleBlob(item: DropRecord, host: DownloadHost, io: DriveDownloadIo): Promise<void> {
-  const blob = await io.fetchBlob(item);
+async function cancelBody(response: Response | undefined): Promise<void> {
+  try {
+    await response?.body?.cancel();
+  } catch {
+    // Already closed, transferred, or locked by the reader that just cancelled it.
+  }
+}
+
+function byteTotal(response: Response, fallback: number): number | undefined {
+  const header = Number(response.headers.get("Content-Length"));
+  if (Number.isFinite(header) && header > 0) return header;
+  if (fallback > 0) return fallback;
+  return undefined;
+}
+
+/** Count bytes as they move. A failed write cancels the source and aborts the destination. */
+async function pump(
+  body: ReadableStream<Uint8Array>,
+  writable: WritableStream<Uint8Array>,
+  onProgress: ((loaded: number, total?: number) => void) | undefined,
+  total: number | undefined,
+): Promise<void> {
+  const reader = body.getReader();
+  const writer = writable.getWriter();
+  let loaded = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      loaded += value.byteLength;
+      onProgress?.(loaded, total);
+      await writer.write(value);
+    }
+    await writer.close();
+  } catch (error) {
+    try {
+      await reader.cancel();
+    } catch {
+      // The source may already be closed.
+    }
+    try {
+      await writer.abort(error);
+    } catch {
+      // The destination may already be closed.
+    }
+    throw error;
+  }
+}
+
+async function saveGoogleBlob(
+  item: DropRecord,
+  host: DownloadHost,
+  io: DriveDownloadIo,
+  observe?: DownloadObserve,
+): Promise<void> {
+  const blob = await io.fetchBlob(item, (loaded, total) => observe?.onProgress?.(loaded, total));
   const urls = objectUrlFns(host);
   const url = urls.create(blob);
   host.clickLink(url, item.fileName || "download");
   setTimeout(() => urls.revoke(url), 2000);
 }
 
-async function streamToPicker(response: Response, host: DownloadHost, fileName: string): Promise<void> {
+async function streamToPicker(
+  open: () => Promise<Response>,
+  host: DownloadHost,
+  fileName: string,
+  size: number,
+  observe?: DownloadObserve,
+): Promise<void> {
   if (!host.showSaveFilePicker) throw new CloudError(t("err.googleLargeNoStream"));
-  if (!response.body) throw new CloudError(t("err.googleDownload"));
   const handle = await host.showSaveFilePicker({ suggestedName: fileName });
-  const writable = await handle.createWritable();
-  await response.body.pipeTo(writable);
+  const response = await open();
+  try {
+    if (!response.body) throw new CloudError(t("err.googleDownload"));
+    const writable = await handle.createWritable();
+    const total = byteTotal(response, size);
+    await pump(response.body, writable, observe?.onProgress, total);
+  } catch (error) {
+    await cancelBody(response);
+    throw error;
+  }
 }
 
 function tokenInUrl(url: string, token: string): boolean {
@@ -254,8 +345,9 @@ async function streamToServiceWorker(
   fileName: string,
   mime: string | undefined,
   size: number,
-  token: string,
+  tokenFor: TokenFor,
   fileId: string,
+  observe?: DownloadObserve,
 ): Promise<void> {
   const worker = (await host.serviceWorker?.()) ?? null;
   if (!worker && !host.postToWorker) throw new CloudError(t("err.googleLargeNoStream"));
@@ -274,11 +366,9 @@ async function streamToServiceWorker(
     ok = await postToWorker(host, stub, { ...base, stream: response.body }, [response.body]);
   }
   if (!ok) {
-    try {
-      await response.body?.cancel();
-    } catch {
-      // Body may already have been transferred.
-    }
+    await cancelBody(response);
+    const token = tokenFor("google");
+    if (!token) throw new CloudError(t("err.download"));
     ok = await postToWorker(
       host,
       stub,
@@ -289,10 +379,12 @@ async function streamToServiceWorker(
   if (!ok) throw new CloudError(t("err.googleLargeNoStream"));
   const origin = host.origin ?? (typeof location !== "undefined" ? location.origin : "");
   const url = `${origin}${DRIVE_DOWNLOAD_SW_PATH}${id}`;
+  const token = tokenFor("google") || "";
   if (tokenInUrl(url, token) || /[?&](access_token|token|bearer)=/i.test(url)) {
     throw new CloudError(t("err.download"));
   }
-  host.clickLink(url, fileName);
+  observe?.onHandoff?.();
+  host.clickLink(url, fileName, { downloadAttribute: false });
 }
 
 function opfsName(fileName: string): string {
@@ -300,20 +392,29 @@ function opfsName(fileName: string): string {
 }
 
 async function streamToOpfsAndShare(
-  response: Response,
+  open: () => Promise<Response>,
   host: DownloadHost,
   fileName: string,
   mime: string | undefined,
+  size: number,
+  observe?: DownloadObserve,
 ): Promise<void> {
   if (!host.getDirectory) throw new CloudError(t("err.googleLargeNoStream"));
-  if (!response.body) throw new CloudError(t("err.googleDownload"));
   const dir = await host.getDirectory();
   const handle = await dir.getFileHandle(opfsName(fileName), { create: true });
   if (typeof handle.createWritable !== "function") {
     throw new CloudError(t("err.googleLargeNoStream"));
   }
-  const writable = await handle.createWritable();
-  await response.body.pipeTo(writable);
+  const response = await open();
+  try {
+    if (!response.body) throw new CloudError(t("err.googleDownload"));
+    const writable = await handle.createWritable();
+    const total = byteTotal(response, size);
+    await pump(response.body, writable, observe?.onProgress, total);
+  } catch (error) {
+    await cancelBody(response);
+    throw error;
+  }
   const file = await handle.getFile();
   const named =
     file.name === fileName ? file : new File([file], fileName, { type: mime || file.type || "application/octet-stream" });
@@ -333,10 +434,10 @@ async function streamToOpfsAndShare(
 async function saveGoogleFile(
   item: DropRecord,
   fileId: string,
-  token: string,
   tokenFor: TokenFor,
   host: DownloadHost,
   io: DriveDownloadIo,
+  observe?: DownloadObserve,
 ): Promise<void> {
   const fileName = item.fileName || "download";
   const method = pickDownloadMethod({
@@ -348,26 +449,36 @@ async function saveGoogleFile(
     hasOpfs: typeof host.getDirectory === "function",
   });
   if (method === "blob") {
-    await saveGoogleBlob(item, host, io);
+    await saveGoogleBlob(item, host, io, observe);
     return;
   }
 
-  const open = () => io.openGoogleMedia(token, fileId);
+  const open = () => {
+    const token = tokenFor("google");
+    if (!token) throw new CloudError(t("err.download"));
+    return io.openGoogleMedia(token, fileId);
+  };
 
   const attempts: Array<() => Promise<void>> = [];
   if (method === "save-picker" || host.showSaveFilePicker) {
-    attempts.push(async () => streamToPicker(await open(), host, fileName));
+    attempts.push(async () => streamToPicker(open, host, fileName, item.size, observe));
   }
   const canUseSw =
     !isSafariLike(host.userAgent) &&
     (typeof host.serviceWorker === "function" || typeof host.postToWorker === "function");
   if (canUseSw && (method === "sw-stream" || method === "save-picker")) {
-    attempts.push(async () =>
-      streamToServiceWorker(await open(), host, fileName, item.mimeType, item.size, token, fileId),
-    );
+    attempts.push(async () => {
+      const response = await open();
+      try {
+        await streamToServiceWorker(response, host, fileName, item.mimeType, item.size, tokenFor, fileId, observe);
+      } catch (error) {
+        await cancelBody(response);
+        throw error;
+      }
+    });
   }
   if (method === "opfs-share" || host.getDirectory) {
-    attempts.push(async () => streamToOpfsAndShare(await open(), host, fileName, item.mimeType));
+    attempts.push(async () => streamToOpfsAndShare(open, host, fileName, item.mimeType, item.size, observe));
   }
 
   let last: unknown;
@@ -393,6 +504,7 @@ export async function saveCloudFile(
   tokenFor: TokenFor,
   host: DownloadHost = defaultHost(),
   io: DriveDownloadIo = defaultIo(),
+  observe?: DownloadObserve,
 ): Promise<void> {
   if (item.kind !== "file") throw new CloudError(t("err.noBlob"));
   let last: unknown;
@@ -405,11 +517,12 @@ export async function saveCloudFile(
       if (ref.provider === "microsoft") {
         const url = await io.microsoftDownloadUrl(token, ref.blobId);
         if (!url.startsWith("https:")) throw new CloudError(t("err.msNoUrl"));
+        observe?.onHandoff?.();
         host.clickLink(url, item.fileName || "download", { newTab: true });
         return;
       }
       if (ref.provider === "google") {
-        await saveGoogleFile(item, ref.blobId, token, tokenFor, host, io);
+        await saveGoogleFile(item, ref.blobId, tokenFor, host, io, observe);
         return;
       }
     } catch (error) {
@@ -420,4 +533,59 @@ export async function saveCloudFile(
   if (last) throw asCloudError(last, t("err.download"));
   if (!tried) throw new CloudError(t("err.download"));
   throw new CloudError(t("err.download"));
+}
+
+/**
+ * One download at a time. The view is set before any network wait so a click is visible
+ * immediately. A browser handoff stays on screen; a finished in-app save clears it.
+ */
+export async function runDownload(input: {
+  item: DropRecord;
+  getView: () => DownloadView | null;
+  setView: (view: DownloadView | null) => void;
+  tokenFor: TokenFor;
+  renew: (provider: ProviderId) => Promise<void>;
+  host?: DownloadHost;
+  io?: DriveDownloadIo;
+}): Promise<void> {
+  if (input.getView()?.phase === "progress") return;
+  const total = input.item.kind === "file" && input.item.size > 0 ? input.item.size : null;
+  input.setView({ itemId: input.item.id, phase: "progress", loaded: 0, total, error: null });
+  try {
+    const providers = [...new Set(input.item.refs.map((ref) => ref.provider))];
+    for (const provider of providers) await input.renew(provider);
+    await saveCloudFile(input.item, input.tokenFor, input.host, input.io, {
+      onProgress(loaded, reported) {
+        const view = input.getView();
+        if (!view || view.itemId !== input.item.id || view.phase !== "progress") return;
+        input.setView({
+          ...view,
+          loaded,
+          total: typeof reported === "number" && reported > 0 ? reported : view.total,
+        });
+      },
+      onHandoff() {
+        const view = input.getView();
+        if (!view || view.itemId !== input.item.id) return;
+        input.setView({ ...view, phase: "handed-off", error: null });
+      },
+    });
+    const view = input.getView();
+    if (view?.itemId === input.item.id && view.phase === "progress") input.setView(null);
+  } catch (error) {
+    if (isUserCancel(error)) {
+      if (input.getView()?.itemId === input.item.id) input.setView(null);
+      return;
+    }
+    const message = error instanceof Error && error.message ? error.message : t("bubble.downloadFailed");
+    const view = input.getView();
+    input.setView({
+      itemId: input.item.id,
+      phase: "error",
+      loaded: view?.itemId === input.item.id ? view.loaded : 0,
+      total: view?.itemId === input.item.id ? view.total : total,
+      error: message,
+    });
+    throw error instanceof CloudError ? error : asCloudError(error, message);
+  }
 }

@@ -71,12 +71,19 @@ export function mimeOf(item: DropRecord): string {
   );
 }
 
-export async function fetchBlob(item: DropRecord, get: StoreGet): Promise<Blob> {
+export async function fetchBlob(
+  item: DropRecord,
+  get: StoreGet,
+  onProgress?: (loaded: number, total?: number) => void,
+): Promise<Blob> {
   const withBlob = item.refs.filter((entry) => entry.blobId);
   if (!withBlob.length) throw new CloudError(t("err.noBlob"));
   for (const entry of withBlob) {
     const cached = await readCachedBlob(`${entry.provider}:${entry.blobId}`);
-    if (cached) return cached;
+    if (cached) {
+      onProgress?.(cached.size, cached.size > 0 ? cached.size : undefined);
+      return cached;
+    }
   }
   if (!navigator.onLine) throw new CloudError(t("err.offlineFile"));
   const connected = withBlob.filter((entry) => (entry.provider === "google" ? get().google : get().microsoft));
@@ -90,7 +97,7 @@ export async function fetchBlob(item: DropRecord, get: StoreGet): Promise<Blob> 
       if (!token || !ref.blobId) throw new CloudError(t("err.providerNoDownload", { label: PROVIDER_LABEL[ref.provider] }));
       const blob =
         ref.provider === "google"
-          ? await downloadGoogleBlob(token, ref.blobId)
+          ? await downloadGoogleBlob(token, ref.blobId, onProgress)
           : await downloadMicrosoftBlob(token, ref.blobId);
       await cacheBlob(`${ref.provider}:${ref.blobId}`, blob);
       return blob;
