@@ -933,6 +933,47 @@ describe("runDownload", () => {
     assert.equal(viewHolder.current, null);
   });
 
+  it("opens Save As before token renewal, and a cancel does not renew", async () => {
+    const order: string[] = [];
+    const saved = harness({
+      item: fileItem({ provider: "google", size: LARGE, fileName: "clip.mp4" }),
+      renew: async () => {
+        order.push("renew");
+      },
+      host: hostStub({
+        showSaveFilePicker: async () => {
+          order.push("picker");
+          return { createWritable: async () => new WritableStream() };
+        },
+      }),
+      io: ioStub({
+        openGoogleMedia: async () => {
+          order.push("open");
+          return new Response(new Uint8Array([1, 2, 3, 4]), { status: 200, headers: { "Content-Length": "4" } });
+        },
+      }),
+    });
+    await saved.run();
+    assert.deepEqual(order, ["picker", "renew", "open"]);
+
+    const cancelledOrder: string[] = [];
+    const cancelled = harness({
+      item: fileItem({ provider: "google", size: LARGE }),
+      renew: async () => {
+        cancelledOrder.push("renew");
+      },
+      host: hostStub({
+        showSaveFilePicker: async () => {
+          cancelledOrder.push("picker");
+          throw new DOMException("The user aborted a request.", "AbortError");
+        },
+      }),
+    });
+    await cancelled.run();
+    assert.deepEqual(cancelledOrder, ["picker"]);
+    assert.equal(cancelled.view, null);
+  });
+
   it("renews the access token before opening Google", async () => {
     const seen: string[] = [];
     let access = "ya29.stale";

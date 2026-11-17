@@ -43,6 +43,8 @@ export type DownloadView = {
 export type DownloadObserve = {
   onProgress?: (loaded: number, total?: number) => void;
   onHandoff?: () => void;
+  /** Token renewal and any other network wait. Call it after Save As, before opening the file. */
+  prepareNetwork?: () => Promise<void>;
 };
 
 /** Text for the shared status line. Unknown totals stay a byte count, never a percent. */
@@ -307,6 +309,7 @@ async function saveGoogleBlob(
   io: DriveDownloadIo,
   observe?: DownloadObserve,
 ): Promise<void> {
+  await observe?.prepareNetwork?.();
   const blob = await io.fetchBlob(item, (loaded, total) => observe?.onProgress?.(loaded, total));
   const urls = objectUrlFns(host);
   const url = urls.create(blob);
@@ -322,7 +325,9 @@ async function streamToPicker(
   observe?: DownloadObserve,
 ): Promise<void> {
   if (!host.showSaveFilePicker) throw new CloudError(t("err.googleLargeNoStream"));
+  // First await in the click. A renewal request before this drops Chrome's user activation.
   const handle = await host.showSaveFilePicker({ suggestedName: fileName });
+  await observe?.prepareNetwork?.();
   const response = await open();
   try {
     if (!response.body) throw new CloudError(t("err.googleDownload"));
@@ -405,6 +410,7 @@ async function streamToOpfsAndShare(
   if (typeof handle.createWritable !== "function") {
     throw new CloudError(t("err.googleLargeNoStream"));
   }
+  await observe?.prepareNetwork?.();
   const response = await open();
   try {
     if (!response.body) throw new CloudError(t("err.googleDownload"));
@@ -468,6 +474,7 @@ async function saveGoogleFile(
     (typeof host.serviceWorker === "function" || typeof host.postToWorker === "function");
   if (canUseSw && (method === "sw-stream" || method === "save-picker")) {
     attempts.push(async () => {
+      await observe?.prepareNetwork?.();
       const response = await open();
       try {
         await streamToServiceWorker(response, host, fileName, item.mimeType, item.size, tokenFor, fileId, observe);
@@ -515,6 +522,7 @@ export async function saveCloudFile(
     tried = true;
     try {
       if (ref.provider === "microsoft") {
+        await observe?.prepareNetwork?.();
         const url = await io.microsoftDownloadUrl(token, ref.blobId);
         if (!url.startsWith("https:")) throw new CloudError(t("err.msNoUrl"));
         observe?.onHandoff?.();
@@ -537,7 +545,8 @@ export async function saveCloudFile(
 
 /**
  * One download at a time. The view is set before any network wait so a click is visible
- * immediately. A browser handoff stays on screen; a finished in-app save clears it.
+ * immediately. Save As is the next await, before token renewal. A browser handoff stays
+ * on screen; a finished in-app save clears it.
  */
 export async function runDownload(input: {
   item: DropRecord;
@@ -551,10 +560,16 @@ export async function runDownload(input: {
   if (input.getView()?.phase === "progress") return;
   const total = input.item.kind === "file" && input.item.size > 0 ? input.item.size : null;
   input.setView({ itemId: input.item.id, phase: "progress", loaded: 0, total, error: null });
-  try {
+  let prepared = false;
+  const prepareNetwork = async () => {
+    if (prepared) return;
     const providers = [...new Set(input.item.refs.map((ref) => ref.provider))];
     for (const provider of providers) await input.renew(provider);
+    prepared = true;
+  };
+  try {
     await saveCloudFile(input.item, input.tokenFor, input.host, input.io, {
+      prepareNetwork,
       onProgress(loaded, reported) {
         const view = input.getView();
         if (!view || view.itemId !== input.item.id || view.phase !== "progress") return;

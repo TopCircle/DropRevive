@@ -551,26 +551,28 @@ export async function downloadGoogleBlob(
       onProgress(0, total);
       return new Blob([], { type: response.headers.get("Content-Type") || "application/octet-stream" });
     }
-    const reader = response.body.getReader();
-    const chunks: BlobPart[] = [];
     let loaded = 0;
+    const counted = response.body.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          loaded += chunk.byteLength;
+          onProgress(loaded, total);
+          controller.enqueue(chunk);
+        },
+      }),
+    );
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        loaded += value.byteLength;
-        onProgress(loaded, total);
-      }
+      return await new Response(counted, {
+        headers: { "Content-Type": response.headers.get("Content-Type") || "application/octet-stream" },
+      }).blob();
     } catch (error) {
       try {
-        await reader.cancel();
+        await counted.cancel();
       } catch {
         // The body is already closed.
       }
       throw error;
     }
-    return new Blob(chunks, { type: response.headers.get("Content-Type") || "application/octet-stream" });
   } catch (error) {
     if (error instanceof CloudError) throw error;
     throw new CloudError(t("err.googleDownload"));

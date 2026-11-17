@@ -10,6 +10,8 @@ DropRevive is an independent project for the kind of need Edge Drop used to cove
 
 Try it live: <https://drop.habor.dpdns.org> · Self-host: [Deploy to Cloudflare](#for-people-who-self-host)
 
+Version 1.4.0 in this repository is ready to release. It is not deployed, and the `v1.4.0` tag does not exist yet. Until that deploy, the live site above is still the deployed 1.3.0: a cloud download is read fully into memory and a click shows no progress.
+
 License: [MIT](LICENSE)
 
 ## For users
@@ -33,7 +35,7 @@ The session belongs to the browser tab, not the P2P Transfer page: you can switc
 
 What works today:
 
-- Send text and files; download, preview, and filter from any connected drive. Cloud uploads over 5 MB (Google Drive) or 4 MB (OneDrive) go in sequential ~8 MiB chunks and can resume a failed chunk in the same page session; a page refresh or a cancelled upload starts over. Cloud downloads stream to disk: OneDrive hands a temporary URL to the browser; Google Drive uses a “Save as” stream or a same-origin Service Worker (Safari and iOS skip that path). Files over about 32 MiB are not cached in IndexedDB and are not previewed as a whole-file Blob.
+- Send text and files; download, preview, and filter from any connected drive. Cloud uploads over 5 MB (Google Drive) or 4 MB (OneDrive) go in sequential ~8 MiB chunks and can resume a failed chunk in the same page session; a page refresh or a cancelled upload starts over. Cloud downloads stream to disk: OneDrive hands a temporary URL to the browser; Google Drive opens “Save as” before token renewal and before the Google request, then streams into that file, or else hands the bytes to the service worker that controls the page (the link does not set the `download` attribute that bypasses the worker; Safari and iOS skip that path). A click shows downloaded bytes and the total immediately. A download the browser takes over says to check the browser’s download list, with no fake percent. Files over about 32 MiB are not cached in IndexedDB and are not previewed as a whole-file Blob.
 - Background sync and manual "Sync now". Incomplete listing does not wipe existing local history.
 - Chinese and English; light / dark / system theme; device name.
 - Install as a PWA. The installed icon and the browser tab icon are two different assets.
