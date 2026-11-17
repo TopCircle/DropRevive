@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { DeleteItem, FolderPicker } from "@/components/drop/desktop-shell";
+import { DownloadStatus } from "@/components/drop/download-status";
 import { Button } from "@/components/ui/button";
 import { isTooLargeToPreview } from "@/lib/drop/download";
 import { formatWhen } from "@/lib/drop/format";
@@ -15,6 +16,7 @@ const CODE_LIKE = /^(\t| {2,})\S|```|[{};]$/m;
 export function PreviewStage({ onClose, onDeleted }: { onClose?: () => void; onDeleted?: () => void }) {
   const preview = useDropStore((state) => state.preview);
   const download = useDropStore((state) => state.download);
+  const downloading = useDropStore((state) => state.downloadView?.phase === "progress");
   // The live record, so a move made from this sheet shows up in the meta line right away.
   const live = useDropStore((state) => state.items.find((entry) => entry.id === state.preview?.item.id));
   const { t } = useI18n();
@@ -77,17 +79,22 @@ export function PreviewStage({ onClose, onDeleted }: { onClose?: () => void; onD
             {t("preview.copy")}
           </Button>
         ) : (
-          <Button
-            size="lg"
-            className="h-12 w-full rounded-full"
-            onClick={() =>
-              void download(item).catch((error: unknown) => {
-                toast.error(error instanceof Error ? error.message : t("bubble.downloadFailed"));
-              })
-            }
-          >
-            {t("preview.download")}
-          </Button>
+          <>
+            <DownloadStatus itemId={item.id} />
+            <Button
+              size="lg"
+              className="h-12 w-full rounded-full"
+              disabled={downloading}
+              aria-busy={downloading || undefined}
+              onClick={() =>
+                void download(item).catch((error: unknown) => {
+                  toast.error(error instanceof Error ? error.message : t("bubble.downloadFailed"));
+                })
+              }
+            >
+              {t("preview.download")}
+            </Button>
+          </>
         )}
         <FolderPicker itemId={item.id} className="h-12 w-full max-w-none rounded-full px-4 text-sm text-foreground" />
         {onDeleted && (

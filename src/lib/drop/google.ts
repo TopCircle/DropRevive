@@ -537,10 +537,42 @@ export async function openGoogleMedia(token: string, fileId: string): Promise<Re
   return response;
 }
 
-export async function downloadGoogleBlob(token: string, fileId: string): Promise<Blob> {
+export async function downloadGoogleBlob(
+  token: string,
+  fileId: string,
+  onProgress?: (loaded: number, total?: number) => void,
+): Promise<Blob> {
   try {
     const response = await openGoogleMedia(token, fileId);
-    return await response.blob();
+    if (!onProgress) return await response.blob();
+    const header = Number(response.headers.get("Content-Length"));
+    const total = Number.isFinite(header) && header > 0 ? header : undefined;
+    if (!response.body) {
+      onProgress(0, total);
+      return new Blob([], { type: response.headers.get("Content-Type") || "application/octet-stream" });
+    }
+    let loaded = 0;
+    const counted = response.body.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          loaded += chunk.byteLength;
+          onProgress(loaded, total);
+          controller.enqueue(chunk);
+        },
+      }),
+    );
+    try {
+      return await new Response(counted, {
+        headers: { "Content-Type": response.headers.get("Content-Type") || "application/octet-stream" },
+      }).blob();
+    } catch (error) {
+      try {
+        await counted.cancel();
+      } catch {
+        // The body is already closed.
+      }
+      throw error;
+    }
   } catch (error) {
     if (error instanceof CloudError) throw error;
     throw new CloudError(t("err.googleDownload"));

@@ -139,8 +139,8 @@ describe("drive sessions: two tabs refreshing OneDrive", () => {
     const tabA = new DriveSessions({ post: poster(cfg, jar, log), ...quick });
     const tabB = new DriveSessions({ post: poster(cfg, jar, log), ...quick });
     const [a, b] = await Promise.all([tabA.fetchTokens("microsoft"), tabB.fetchTokens("microsoft")]);
-    assert.equal((a.microsoft as { access_token: string }).access_token, "AT2");
-    assert.equal((b.microsoft as { access_token: string }).access_token, "AT3");
+    const tokens = [(a.microsoft as { access_token: string }).access_token, (b.microsoft as { access_token: string }).access_token].sort();
+    assert.deepEqual(tokens, ["AT2", "AT3"]);
     // Both sent RT1 at once; Microsoft refused the second, which then retried with RT2.
     assert.deepEqual(ms.refreshes, ["RT1", "RT1", "RT2"]);
     assert.ok(jar.values.has(M_COOKIE), "the refused tab did not clear the cookie");

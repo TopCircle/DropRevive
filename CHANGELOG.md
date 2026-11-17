@@ -6,11 +6,17 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-17
+
+1.4.0 包含此前未单独发布的云盘流式下载、点对点可续传，以及 Google 下载状态修复。线上是否在跑这一版，以设置页底部的版本号和 `production` 标签为准。 / 1.4.0 includes the streaming cloud downloads, resumable P2P, and the Google download-state fix that had not shipped on their own. Whether the live site is running this version is the version at the bottom of Settings and the commit the `production` tag points at.
+
 ### 中文
+- **Google 下载点击后立刻有状态**：下载中显示已下载字节和总量（总量未知时只显示已下载），并挡住重复点击。另存为在令牌续期和连上 Google 之前弹出；取消不算失败。交给浏览器的下载会提示「已交给浏览器，请在下载列表查看」，不显示假的百分比。Service Worker 这条链接不再使用会绕过拦截的 `download` 属性，并且只发给正在控制当前页面的 Service Worker。
 - **点对点直传改为边发边写、可续传**：两端都是新版本时，单文件和整批上限为 1 GB（Safari 512 MiB，iOS 256 MiB），用更大的分块和 8 字节偏移发送；发送端按 `File.slice` 读盘，接收端边收边写、不预分配整文件；同一页面 10 分钟内重连可从断点继续，并按文件做流式 SHA-256 校验。任一方仍是旧版本时，限额和协议保持原来的 32 / 64 MiB、最多 8 个文件，也不会向旧端发送新的 JSON。
 - **云盘下载改为边下边存**：OneDrive 把临时下载链接交给浏览器，不再整文件读进内存。Google Drive 优先用「另存为」流式写入，否则通过本站 Service Worker 流式下载（令牌经 postMessage 传递，不放进网址）；Safari 与 iOS 不用这条 Service Worker 路径。超过约 32 MiB 的文件不再写入 IndexedDB，也不能在页面里整文件预览；在不能流式保存的浏览器里，大文件会提示换用 Chrome 或 Edge，或改从 OneDrive 下载。
 
 ### English
+- **A Google download shows its state as soon as you click**: while bytes are moving it shows downloaded and total (downloaded only, when the total is unknown) and ignores a second click. Save As opens before token renewal and before the Google request; cancelling it is not an error. A download the browser takes over says it was handed to the browser's download list, with no fake percent. The Service Worker link no longer sets the `download` attribute that bypasses the worker, and it is sent only to the worker controlling the page.
 - **P2P transfer now streams to disk and can resume**: when both sides are current, the cap is 1 GB per file and per batch (512 MiB on Safari, 256 MiB on iOS), sent in larger frames with 8-byte offsets. The sender reads with `File.slice`; the receiver writes as bytes arrive and does not pre-allocate the file. A drop in the same tab can resume within 10 minutes, and each file is checked with a streaming SHA-256 digest. If either side is on the previous version, the original 32 / 64 MiB / 8-file caps and protocol stay in force, and no new JSON is sent to the old client.
 - **Cloud downloads now stream to disk**: OneDrive hands its temporary download URL to the browser and no longer reads the whole file into memory. Google Drive prefers a “Save as” streaming write, then a same-origin Service Worker stream (token via postMessage, never in the URL); Safari and iOS skip that Service Worker path. Files over about 32 MiB are no longer written to IndexedDB and are not previewed as a whole-file Blob. Browsers that cannot stream a large Google file to disk show a prompt to use Chrome or Edge, or to download from OneDrive instead.
 
@@ -82,7 +88,8 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 - **Security**: Google uses only `drive.file`; refresh tokens live only in encrypted HttpOnly cookies. Report vulnerabilities privately (see SECURITY.md).
 - **Known limitations**: mobile background tabs may suspend WebRTC, so keep the page in front while transferring; some networks block the direct link, so use the cloud inbox.
 
-[Unreleased]: https://github.com/TopCircle/DropRevive/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/TopCircle/DropRevive/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/TopCircle/DropRevive/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/TopCircle/DropRevive/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/TopCircle/DropRevive/releases/tag/v1.2.0
 [1.1.0]: https://github.com/TopCircle/DropRevive/releases/tag/v1.1.0

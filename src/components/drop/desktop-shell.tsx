@@ -7,6 +7,7 @@ import { SendMode } from "@/components/drop/send-mode";
 import { CopyText } from "@/components/drop/copy-text";
 import { LanBadge } from "@/components/drop/lan-badge";
 import { useLanOpenRequests } from "@/components/drop/lan-session-store";
+import { DownloadStatus } from "@/components/drop/download-status";
 import { PreviewStage } from "@/components/drop/preview-dialog";
 import { useLongPress } from "@/components/drop/use-long-press";
 import { OverlayScrollbar } from "@/components/drop/overlay-scrollbar";
@@ -801,6 +802,7 @@ function Bubble({
   onPreview: (item: DropRecord) => void;
 }) {
   const { t } = useI18n();
+  const downloading = useDropStore((state) => state.downloadView?.phase === "progress");
   return (
     // Bubbles shrink to short content and grow to the full column; actions sit on a row below (shown on hover).
     <div className="group flex flex-col items-start">
@@ -815,11 +817,13 @@ function Bubble({
             return;
           }
           if (isThumb(item)) return onPreview(item);
+          if (downloading) return;
           void onDownload(item).catch((error: unknown) => {
             toast.error(error instanceof Error ? error.message : t("bubble.downloadFailed"));
           });
         }}
       />
+      {item.kind === "file" && <DownloadStatus itemId={item.id} />}
       <div className="flex min-h-8 flex-wrap items-center gap-1">
         {item.kind === "text" && item.text && <CopyText text={item.text} />}
         <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
