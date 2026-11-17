@@ -8,7 +8,7 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 
 ## [1.4.0] - 2026-11-17
 
-尚未部署，也未创建 `v1.4.0` 标签。本版本已准备发布，包含此前未发布的云盘流式下载、点对点可续传，以及 Google 下载状态修复。仓库记录的上一次正式部署仍是 1.3.0（2026-11-12）。 / Not deployed, and the `v1.4.0` tag has not been created. This version is ready to release. It includes the previously unreleased streaming cloud downloads, resumable P2P, and the Google download-state fix. The last recorded production deploy is still 1.3.0 (2026-11-12).
+1.4.0 包含此前未单独发布的云盘流式下载、点对点可续传，以及 Google 下载状态修复。线上是否在跑这一版，以设置页底部的版本号和 `production` 标签为准。 / 1.4.0 includes the streaming cloud downloads, resumable P2P, and the Google download-state fix that had not shipped on their own. Whether the live site is running this version is the version at the bottom of Settings and the commit the `production` tag points at.
 
 ### 中文
 - **Google 下载点击后立刻有状态**：下载中显示已下载字节和总量（总量未知时只显示已下载），并挡住重复点击。另存为在令牌续期和连上 Google 之前弹出；取消不算失败。交给浏览器的下载会提示「已交给浏览器，请在下载列表查看」，不显示假的百分比。Service Worker 这条链接不再使用会绕过拦截的 `download` 属性，并且只发给正在控制当前页面的 Service Worker。
