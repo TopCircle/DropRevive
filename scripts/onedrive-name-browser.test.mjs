@@ -23,6 +23,24 @@ const chromeBin = ["google-chrome", "google-chrome-stable", "chromium", "chromiu
   (bin) => spawnSync("which", [bin], { encoding: "utf8" }).status === 0,
 );
 
+function stopChrome(chrome) {
+  if (!chrome?.pid || chrome.exitCode !== null || chrome.signalCode !== null) return Promise.resolve();
+  const exited = new Promise((resolve) => {
+    chrome.once("exit", resolve);
+    if (chrome.exitCode !== null || chrome.signalCode !== null) resolve();
+  });
+  try {
+    process.kill(-chrome.pid, "SIGKILL");
+  } catch {
+    try { chrome.kill("SIGKILL"); } catch { /* already gone */ }
+  }
+  return Promise.race([exited, delay(1000)]);
+}
+
+function removeTree(path) {
+  rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 40 });
+}
+
 function sha256(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }
@@ -129,7 +147,7 @@ window.refuseLarge = (size) => size > ${CAP} ? "refused" : "would-fetch";
       `--user-data-dir=${profile}`,
       `--remote-debugging-port=${debug}`,
       "about:blank",
-    ], { stdio: "ignore" });
+    ], { stdio: "ignore", detached: true });
     let version;
     try {
       for (let i = 0; i < 50 && !version; i++) {
@@ -254,11 +272,11 @@ window.refuseLarge = (size) => size > ${CAP} ? "refused" : "would-fetch";
       );
       ws.close();
     } finally {
-      chrome.kill("SIGKILL");
+      await stopChrome(chrome);
       files.close();
       page.close();
-      rmSync(profile, { recursive: true, force: true });
-      rmSync(downloads, { recursive: true, force: true });
+      removeTree(profile);
+      removeTree(downloads);
     }
   },
 );
