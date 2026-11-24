@@ -562,7 +562,12 @@ async function openOneDrive(tokenFor: TokenFor, blobId: string, io: DriveDownloa
   if (!token) throw new CloudError(t("err.download"));
   const url = await io.microsoftDownloadUrl(token, blobId);
   if (!url.startsWith("https:")) throw new CloudError(t("err.msNoUrl"));
-  return io.openMicrosoftContent(url);
+  const response = await io.openMicrosoftContent(url);
+  if (!response.ok) {
+    await cancelBody(response);
+    throw new CloudError(t("err.msFile"));
+  }
+  return response;
 }
 
 /**

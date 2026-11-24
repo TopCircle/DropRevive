@@ -437,6 +437,44 @@ describe("saveCloudFile", () => {
     assert.equal(host.links.length, 0);
   });
 
+  it("a failed large OneDrive response is not saved under the original name", async () => {
+    let cancelled = false;
+    let opened = false;
+    const host = hostStub({
+      showSaveFilePicker: async () => ({
+        createWritable: async () => {
+          opened = true;
+          return new WritableStream();
+        },
+      }),
+    });
+    const io = ioStub({
+      openMicrosoftContent: async () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              controller.enqueue(new TextEncoder().encode('{"error":"expired"}'));
+            },
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        ),
+    });
+    await assert.rejects(
+      () => saveCloudFile(fileItem({ provider: "microsoft", size: LARGE, fileName: "报告 终稿.tar.gz" }), tokenFor, host, io),
+      (error: unknown) => {
+        assert.ok(error instanceof CloudError);
+        assert.equal(error.message, zhMessages["err.msFile"]);
+        return true;
+      },
+    );
+    assert.equal(opened, false);
+    assert.equal(cancelled, true);
+    assert.equal(host.links.length, 0);
+  });
+
   it("a large OneDrive file without Save As explains the limit and does not fetch or fall back to the storage name", async () => {
     const host = hostStub();
     const io = ioStub();
