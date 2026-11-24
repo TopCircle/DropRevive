@@ -6,6 +6,12 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
+### 中文
+- **OneDrive 下载保留原文件名和扩展名**：约 32 MB 及以下按预授权地址取回后用原来的文件名保存；更大的文件先用原名弹出「另存为」再写入。没有「另存为」的浏览器会说明限制，不再把文件存成没有扩展名的内部名。
+
+### English
+- **OneDrive downloads keep the original file name and extension**: files up to about 32 MB are fetched from the pre-authenticated URL and saved under the original name; larger files open Save As with that name before the bytes are read. A browser without Save As explains the limit instead of saving the internal name with no extension.
+
 ## [1.4.0] - 2026-11-17
 
 1.4.0 包含此前未单独发布的云盘流式下载、点对点可续传，以及 Google 下载状态修复。线上是否在跑这一版，以设置页底部的版本号和 `production` 标签为准。 / 1.4.0 includes the streaming cloud downloads, resumable P2P, and the Google download-state fix that had not shipped on their own. Whether the live site is running this version is the version at the bottom of Settings and the commit the `production` tag points at.
