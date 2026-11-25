@@ -20,7 +20,6 @@ export const DRIVE_DOWNLOAD_SW_TYPE = "droprevive-drive-download";
 export const DRIVE_DOWNLOAD_SW_PATH = "/__drive-download/";
 
 export type DownloadMethod =
-  | "onedrive-url"
   | "blob"
   | "save-picker"
   | "sw-stream"
@@ -93,6 +92,8 @@ export type DownloadHost = {
 
 export type DriveDownloadIo = {
   microsoftDownloadUrl: (token: string, itemId: string) => Promise<string>;
+  /** Fetch a preauthenticated OneDrive URL. Callers pass no RequestInit, so no Authorization header. */
+  openMicrosoftContent: (url: string) => Promise<Response>;
   openGoogleMedia: (token: string, fileId: string) => Promise<Response>;
   fetchBlob: (item: DropRecord, onProgress?: (loaded: number, total?: number) => void) => Promise<Blob>;
 };
@@ -150,7 +151,11 @@ export function pickDownloadMethod(input: {
   isSafari: boolean;
   hasOpfs: boolean;
 }): DownloadMethod {
-  if (input.provider === "microsoft") return "onedrive-url";
+  if (input.provider === "microsoft") {
+    if (input.size <= BLOB_FILE_MAX_BYTES) return "blob";
+    if (input.hasSavePicker) return "save-picker";
+    return "unsupported";
+  }
   if (input.size <= BLOB_FILE_MAX_BYTES) return "blob";
   if (input.hasSavePicker) return "save-picker";
   if (input.hasServiceWorker && !input.isSafari) return "sw-stream";
@@ -207,9 +212,20 @@ export function defaultHost(): DownloadHost {
   };
 }
 
+/**
+ * Read a preauthenticated `@microsoft.graph.downloadUrl`. Microsoft documents this as the
+ * browser download: no Authorization header, so the request stays a simple CORS GET.
+ * Passing a bearer token would force a preflight, which this URL is not documented to allow.
+ */
+export function openMicrosoftContent(url: string): Promise<Response> {
+  if (!url.startsWith("https:")) return Promise.reject(new CloudError(t("err.msNoUrl")));
+  return fetch(url);
+}
+
 export function defaultIo(get?: StoreGet): DriveDownloadIo {
   return {
     microsoftDownloadUrl,
+    openMicrosoftContent,
     openGoogleMedia,
     fetchBlob: (item, onProgress) => {
       if (!get) throw new CloudError(t("err.download"));
@@ -501,9 +517,104 @@ async function saveGoogleFile(
   throw asCloudError(last, t("err.googleLargeNoStream"));
 }
 
+/** Count a OneDrive body into one Blob. Refuses a body larger than the 32 MiB cap. */
+async function readMicrosoftBlob(
+  response: Response,
+  onProgress: ((loaded: number, total?: number) => void) | undefined,
+): Promise<Blob> {
+  if (!response.ok || !response.body) throw new CloudError(t("err.msFile"));
+  const total = byteTotal(response, 0);
+  if (total !== undefined && total > BLOB_FILE_MAX_BYTES) {
+    await cancelBody(response);
+    throw new CloudError(t("err.msLargeNoPicker"));
+  }
+  let loaded = 0;
+  const counted = response.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        loaded += chunk.byteLength;
+        if (loaded > BLOB_FILE_MAX_BYTES) {
+          controller.error(new CloudError(t("err.msLargeNoPicker")));
+          return;
+        }
+        onProgress?.(loaded, total);
+        controller.enqueue(chunk);
+      },
+    }),
+  );
+  try {
+    return await new Response(counted, {
+      headers: { "Content-Type": response.headers.get("Content-Type") || "application/octet-stream" },
+    }).blob();
+  } catch (error) {
+    try {
+      await counted.cancel();
+    } catch {
+      // The reader already cancelled it.
+    }
+    if (error instanceof CloudError) throw error;
+    throw error;
+  }
+}
+
+async function openOneDrive(tokenFor: TokenFor, blobId: string, io: DriveDownloadIo): Promise<Response> {
+  const token = tokenFor("microsoft");
+  if (!token) throw new CloudError(t("err.download"));
+  const url = await io.microsoftDownloadUrl(token, blobId);
+  if (!url.startsWith("https:")) throw new CloudError(t("err.msNoUrl"));
+  const response = await io.openMicrosoftContent(url);
+  if (!response.ok) {
+    await cancelBody(response);
+    throw new CloudError(t("err.msFile"));
+  }
+  return response;
+}
+
+/**
+ * Small OneDrive files keep their original name via a same-origin Blob.
+ * Large files use Save As, opened before any network wait. Without that picker the
+ * cross-origin URL would save the storage name, so the download stops with an explanation.
+ */
+async function saveMicrosoftFile(
+  item: DropRecord,
+  blobId: string,
+  tokenFor: TokenFor,
+  host: DownloadHost,
+  io: DriveDownloadIo,
+  observe?: DownloadObserve,
+): Promise<void> {
+  const fileName = item.fileName || "download";
+  const method = pickDownloadMethod({
+    provider: "microsoft",
+    size: item.size,
+    hasSavePicker: typeof host.showSaveFilePicker === "function",
+    hasServiceWorker: false,
+    isSafari: false,
+    hasOpfs: false,
+  });
+  if (method === "save-picker") {
+    await streamToPicker(() => openOneDrive(tokenFor, blobId, io), host, fileName, item.size, observe);
+    return;
+  }
+  if (method !== "blob") throw new CloudError(t("err.msLargeNoPicker"));
+  await observe?.prepareNetwork?.();
+  const response = await openOneDrive(tokenFor, blobId, io);
+  let blob: Blob;
+  try {
+    blob = await readMicrosoftBlob(response, observe?.onProgress);
+  } catch (error) {
+    await cancelBody(response);
+    throw error;
+  }
+  const urls = objectUrlFns(host);
+  const url = urls.create(blob);
+  host.clickLink(url, fileName);
+  setTimeout(() => urls.revoke(url), 2000);
+}
+
 /**
  * Save a cloud file to the user's disk without loading a large file into a single Blob.
- * OneDrive always hands the pre-authenticated download URL to the browser.
+ * OneDrive fetches the pre-authenticated download URL with no Authorization header.
  * Google streams (Save As, Service Worker, or OPFS+share) above {@link BLOB_FILE_MAX_BYTES}.
  */
 export async function saveCloudFile(
@@ -522,11 +633,7 @@ export async function saveCloudFile(
     tried = true;
     try {
       if (ref.provider === "microsoft") {
-        await observe?.prepareNetwork?.();
-        const url = await io.microsoftDownloadUrl(token, ref.blobId);
-        if (!url.startsWith("https:")) throw new CloudError(t("err.msNoUrl"));
-        observe?.onHandoff?.();
-        host.clickLink(url, item.fileName || "download", { newTab: true });
+        await saveMicrosoftFile(item, ref.blobId, tokenFor, host, io, observe);
         return;
       }
       if (ref.provider === "google") {

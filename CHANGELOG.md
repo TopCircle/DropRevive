@@ -7,9 +7,11 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 ## [Unreleased]
 
 ### 中文
+- **OneDrive 下载保留原文件名和扩展名**：约 32 MB 及以下按预授权地址取回后用原来的文件名保存；更大的文件先用原名弹出「另存为」再写入。没有「另存为」的浏览器会说明限制，不再把文件存成没有扩展名的内部名。
 - **点对点直连不再因能力行位置失败**：`a=x-droprevive:stream-v2` 写在会话属性区、第一条 `m=` 之前。写在 `v=` 和 `o=` 之间时，Chromium 会拒绝整份 SDP，两端在交换候选地址之前就看到「两台设备没能直连」。信令仍发送插入后的原文；Chrome 可能从 `localDescription` 去掉这行未知属性，对端能力不从那份副本读取。仍无 TURN。浏览器测试只确认描述能被解析，不代表数据通道已连通。
 
 ### English
+- **OneDrive downloads keep the original file name and extension**: files up to about 32 MB are fetched from the pre-authenticated URL and saved under the original name; larger files open Save As with that name before the bytes are read. A browser without Save As explains the limit instead of saving the internal name with no extension.
 - **Direct connect no longer fails on the capability line's position**: `a=x-droprevive:stream-v2` is written with the session attributes, before the first `m=` line. Between `v=` and `o=`, Chromium rejects the whole SDP and both sides show the direct-connect failure before any candidate is exchanged. Signaling still sends that text; Chrome may drop the unknown attribute from `localDescription`, and the peer's capability is not read from that copy. Still no TURN. The browser test only checks that the description parses, not that a data channel connected.
 
 ## [1.4.0] - 2026-11-17

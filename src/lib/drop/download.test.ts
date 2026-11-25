@@ -107,6 +107,13 @@ function ioStub(overrides: Partial<DriveDownloadIo> = {}): DriveDownloadIo & {
       state.msUrls += 1;
       return "https://cdn.example/onedrive/file?sig=abc";
     },
+    openMicrosoftContent: async (url) => {
+      if (!url.startsWith("https:")) throw new Error("refusing a non-https OneDrive URL");
+      return new Response(new Uint8Array([1, 2, 3, 4]), {
+        status: 200,
+        headers: { "Content-Length": "4" },
+      });
+    },
     openGoogleMedia: async () => {
       state.media += 1;
       return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
@@ -184,7 +191,18 @@ describe("isSafariLike", () => {
 });
 
 describe("pickDownloadMethod", () => {
-  it("always hands OneDrive to the browser, at any size", () => {
+  it("saves a small OneDrive file as a Blob and a large one only through Save As", () => {
+    assert.equal(
+      pickDownloadMethod({
+        provider: "microsoft",
+        size: THIRTY_TWO,
+        hasSavePicker: false,
+        hasServiceWorker: false,
+        isSafari: true,
+        hasOpfs: false,
+      }),
+      "blob",
+    );
     assert.equal(
       pickDownloadMethod({
         provider: "microsoft",
@@ -194,18 +212,18 @@ describe("pickDownloadMethod", () => {
         isSafari: false,
         hasOpfs: true,
       }),
-      "onedrive-url",
+      "save-picker",
     );
     assert.equal(
       pickDownloadMethod({
         provider: "microsoft",
-        size: 10,
+        size: LARGE,
         hasSavePicker: false,
-        hasServiceWorker: false,
-        isSafari: true,
-        hasOpfs: false,
+        hasServiceWorker: true,
+        isSafari: false,
+        hasOpfs: true,
       }),
-      "onedrive-url",
+      "unsupported",
     );
   });
 
@@ -271,30 +289,244 @@ describe("parseMicrosoftDownloadUrl", () => {
   });
 });
 
+const STORAGE_NAME = "b_b033f1af-78ac-4936-a732-4be056c20b0f";
+
+function microsoftBody(bytes: Uint8Array, name = STORAGE_NAME): Response {
+  const body = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(body).set(bytes);
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Length": String(bytes.byteLength),
+      "Content-Type": "application/octet-stream",
+      "Content-Disposition": `attachment; filename="${name}"`,
+    },
+  });
+}
+
 describe("saveCloudFile", () => {
-  it("OneDrive: hands the https downloadUrl to the browser and never calls blob or Google", async () => {
-    const host = hostStub();
-    const io = ioStub();
-    let blobbed = false;
-    const originalBlob = Response.prototype.blob;
-    Response.prototype.blob = async function blob() {
-      blobbed = true;
-      return originalBlob.call(this);
-    };
-    try {
-      await saveCloudFile(fileItem({ provider: "microsoft", size: LARGE, fileName: "big.iso" }), tokenFor, host, io);
-    } finally {
-      Response.prototype.blob = originalBlob;
-    }
+  it("OneDrive at or under 32 MiB fetches the preauthenticated URL with no Authorization and saves the original name", async () => {
+    const seen: string[] = [];
+    const host = hostStub({
+      createObjectURL: (blob) => `blob:onedrive/${blob.size}`,
+      revokeObjectURL: () => undefined,
+    });
+    const progress: Array<[number, number | undefined]> = [];
+    const io = ioStub({
+      openMicrosoftContent: async (url) => {
+        seen.push(url);
+        return microsoftBody(new Uint8Array([7, 8, 9]));
+      },
+    });
+    await saveCloudFile(
+      fileItem({ provider: "microsoft", size: 3, fileName: "会议 记录.v1.2.final.pdf" }),
+      tokenFor,
+      host,
+      io,
+      { onProgress: (loaded, total) => progress.push([loaded, total]) },
+    );
     assert.equal(io.msUrls, 1);
     assert.equal(io.blobs, 0);
     assert.equal(io.media, 0);
-    assert.equal(blobbed, false);
+    assert.deepEqual(seen, ["https://cdn.example/onedrive/file?sig=abc"]);
     assert.equal(host.links.length, 1);
-    assert.equal(host.links[0]?.url, "https://cdn.example/onedrive/file?sig=abc");
-    assert.equal(host.links[0]?.fileName, "big.iso");
-    assert.equal(host.links[0]?.newTab, true);
-    assert.doesNotMatch(host.links[0]?.url ?? "", /ms-token-secret/);
+    assert.equal(host.links[0]?.url, "blob:onedrive/3");
+    assert.equal(host.links[0]?.fileName, "会议 记录.v1.2.final.pdf");
+    assert.equal(host.links[0]?.newTab, undefined);
+    assert.deepEqual(progress, [[3, 3]]);
+    assert.equal(host.links.some((link) => link.url.includes("cdn.example")), false);
+  });
+
+  it("OneDrive over 32 MiB asks for the original name before any download URL, then streams the body", async () => {
+    const order: string[] = [];
+    const written: number[] = [];
+    const host = hostStub({
+      showSaveFilePicker: async (opts) => {
+        order.push(`picker:${opts.suggestedName}`);
+        return {
+          createWritable: async () =>
+            new WritableStream({
+              write(chunk) {
+                written.push(chunk.byteLength);
+              },
+            }),
+        };
+      },
+    });
+    const io = ioStub({
+      microsoftDownloadUrl: async () => {
+        order.push("url");
+        return "https://files.1drv.com/y4m/item";
+      },
+      openMicrosoftContent: async (url) => {
+        order.push(`open:${url}`);
+        const bytes = new Uint8Array([4, 5, 6, 7]);
+        return new Response(bytes, {
+          status: 200,
+          headers: {
+            "Content-Length": "4",
+            "Content-Disposition": `attachment; filename="${STORAGE_NAME}"`,
+          },
+        });
+      },
+    });
+    await saveCloudFile(
+      fileItem({ provider: "microsoft", size: LARGE, fileName: "报告 终稿.tar.gz" }),
+      tokenFor,
+      host,
+      io,
+      {
+        prepareNetwork: async () => {
+          order.push("renew");
+        },
+        onProgress: (loaded) => order.push(`bytes:${loaded}`),
+      },
+    );
+    assert.deepEqual(order, ["picker:报告 终稿.tar.gz", "renew", "url", "open:https://files.1drv.com/y4m/item", "bytes:4"]);
+    assert.equal(written.reduce((sum, n) => sum + n, 0), 4);
+    assert.equal(host.links.length, 0);
+  });
+
+  it("a cancelled OneDrive Save As does not resolve the download URL", async () => {
+    let urls = 0;
+    const host = hostStub({
+      showSaveFilePicker: async () => {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      },
+    });
+    const io = ioStub({
+      microsoftDownloadUrl: async () => {
+        urls += 1;
+        return "https://files.1drv.com/item";
+      },
+    });
+    await saveCloudFile(fileItem({ provider: "microsoft", size: LARGE, fileName: "报告 终稿.tar.gz" }), tokenFor, host, io);
+    assert.equal(urls, 0);
+    assert.equal(host.links.length, 0);
+  });
+
+  it("an OneDrive stream failure cancels the response and does not open the storage name", async () => {
+    let cancelled = false;
+    const stream = new ReadableStream({
+      pull(controller) {
+        controller.enqueue(new Uint8Array([1, 2]));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const host = hostStub({
+      showSaveFilePicker: async () => ({
+        createWritable: async () =>
+          new WritableStream({
+            write() {
+              throw new Error("disk full");
+            },
+          }),
+      }),
+    });
+    const io = ioStub({
+      openMicrosoftContent: async () =>
+        new Response(stream, { status: 200, headers: { "Content-Length": "2", "Content-Disposition": `attachment; filename="${STORAGE_NAME}"` } }),
+    });
+    await assert.rejects(
+      () => saveCloudFile(fileItem({ provider: "microsoft", size: LARGE, fileName: "报告 终稿.tar.gz" }), tokenFor, host, io),
+      /disk full/,
+    );
+    assert.equal(cancelled, true);
+    assert.equal(host.links.length, 0);
+  });
+
+  it("a failed large OneDrive response is not saved under the original name", async () => {
+    let cancelled = false;
+    let opened = false;
+    const host = hostStub({
+      showSaveFilePicker: async () => ({
+        createWritable: async () => {
+          opened = true;
+          return new WritableStream();
+        },
+      }),
+    });
+    const io = ioStub({
+      openMicrosoftContent: async () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              controller.enqueue(new TextEncoder().encode('{"error":"expired"}'));
+            },
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } },
+        ),
+    });
+    await assert.rejects(
+      () => saveCloudFile(fileItem({ provider: "microsoft", size: LARGE, fileName: "报告 终稿.tar.gz" }), tokenFor, host, io),
+      (error: unknown) => {
+        assert.ok(error instanceof CloudError);
+        assert.equal(error.message, zhMessages["err.msFile"]);
+        return true;
+      },
+    );
+    assert.equal(opened, false);
+    assert.equal(cancelled, true);
+    assert.equal(host.links.length, 0);
+  });
+
+  it("a large OneDrive file without Save As explains the limit and does not fetch or fall back to the storage name", async () => {
+    const host = hostStub();
+    const io = ioStub();
+    await assert.rejects(
+      () => saveCloudFile(fileItem({ provider: "microsoft", size: LARGE, fileName: "会议 记录.v1.2.final.pdf" }), tokenFor, host, io),
+      (error: unknown) => {
+        assert.ok(error instanceof CloudError);
+        assert.equal(error.message, zhMessages["err.msLargeNoPicker"]);
+        assert.match(en.messages["err.msLargeNoPicker"], /original name/);
+        return true;
+      },
+    );
+    assert.equal(io.msUrls, 0);
+    assert.equal(host.links.length, 0);
+  });
+
+  it("refuses to buffer an OneDrive response larger than 32 MiB", async () => {
+    const host = hostStub({
+      createObjectURL: () => {
+        throw new Error("must not build a blob URL");
+      },
+    });
+    const io = ioStub({
+      openMicrosoftContent: async () =>
+        new Response(new Uint8Array([1]), {
+          status: 200,
+          headers: { "Content-Length": String(LARGE), "Content-Disposition": `attachment; filename="${STORAGE_NAME}"` },
+        }),
+    });
+    await assert.rejects(
+      () => saveCloudFile(fileItem({ provider: "microsoft", size: 4, fileName: "会议 记录.v1.2.final.pdf" }), tokenFor, host, io),
+      CloudError,
+    );
+    assert.equal(host.links.length, 0);
+  });
+
+  it("fetches a preauthenticated OneDrive URL with no request headers", async () => {
+    const { openMicrosoftContent } = await import("./download.ts");
+    const original = globalThis.fetch;
+    const calls: Array<{ argc: number; init: RequestInit | undefined }> = [];
+    globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+      calls.push({ argc: args.length, init: args[1] });
+      return new Response(new Uint8Array([1]), { status: 200 });
+    }) as typeof fetch;
+    try {
+      await openMicrosoftContent("https://files.1drv.com/y4m");
+      assert.deepEqual(calls, [{ argc: 1, init: undefined }]);
+      await assert.rejects(() => openMicrosoftContent("http://files.1drv.com/y4m"), CloudError);
+      assert.equal(calls.length, 1);
+    } finally {
+      globalThis.fetch = original;
+    }
   });
 
   it("rejects a non-https OneDrive URL", async () => {
@@ -731,10 +963,22 @@ describe("Google download fixes", () => {
       await saveCloudFile(fileItem({ provider: "google", size: 1024, fileName: "note.txt" }), tokenFor, blobHost, ioStub());
       assert.equal(anchors[0]?.download, "note.txt");
 
-      const driveHost = hostStub({ clickLink: real.clickLink });
-      await saveCloudFile(fileItem({ provider: "microsoft", size: LARGE, fileName: "big.iso" }), tokenFor, driveHost, ioStub());
-      assert.equal(anchors[1]?.download, "big.iso");
-      assert.equal(anchors[1]?.target, "_blank");
+      const driveHost = hostStub({
+        clickLink: real.clickLink,
+        createObjectURL: () => "blob:https://drop.example/onedrive",
+        revokeObjectURL: () => undefined,
+      });
+      await saveCloudFile(
+        fileItem({ provider: "microsoft", size: 4, fileName: "报告 终稿.tar.gz" }),
+        tokenFor,
+        driveHost,
+        ioStub({
+          openMicrosoftContent: async () => microsoftBody(new Uint8Array([1, 2, 3, 4])),
+        }),
+      );
+      assert.equal(anchors[1]?.download, "报告 终稿.tar.gz");
+      assert.equal(anchors[1]?.href, "blob:https://drop.example/onedrive");
+      assert.equal(anchors[1]?.target, "");
     } finally {
       delete (globalThis as { document?: unknown }).document;
     }
@@ -815,6 +1059,31 @@ describe("runDownload", () => {
       });
     return { views, run, get view() { return view; } };
   }
+
+  it("records OneDrive bytes under the original name, and a large file without Save As stays an error", async () => {
+    const small = harness({
+      item: fileItem({ provider: "microsoft", size: 4, fileName: "会议 记录.v1.2.final.pdf" }),
+      host: hostStub({
+        createObjectURL: () => "blob:https://drop.example/od",
+        revokeObjectURL: () => undefined,
+      }),
+      io: ioStub({
+        openMicrosoftContent: async () => microsoftBody(new Uint8Array([1, 2, 3, 4])),
+      }),
+    });
+    await small.run();
+    assert.ok(small.views.some((entry) => entry?.phase === "progress" && entry.loaded === 4 && entry.total === 4));
+    assert.equal(small.view, null);
+
+    const large = harness({
+      item: fileItem({ provider: "microsoft", size: LARGE, fileName: "报告 终稿.tar.gz" }),
+      host: hostStub(),
+      io: ioStub(),
+    });
+    await assert.rejects(() => large.run(), /原来的文件名/);
+    assert.equal(large.view?.phase, "error");
+    assert.match(large.view?.error ?? "", /原来的文件名/);
+  });
 
   it("shows progress before renewal and ignores a second click while downloading", async () => {
     let release: (() => void) | undefined;

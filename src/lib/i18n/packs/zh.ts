@@ -297,6 +297,7 @@ export const zhMessages = {
   "err.msNoFolder": "OneDrive 没有返回文件夹编号。",
   "err.msFolderExists": "OneDrive 文件夹已经存在，但没有拿到编号。",
   "err.msNoUrl": "OneDrive 没有给出下载地址。",
+  "err.msLargeNoPicker": "这个文件超过约 32 MB，当前浏览器不能用原来的文件名保存。请改用 Chrome 或 Edge。",
   "err.msMeta": "OneDrive 上的记录下载失败。",
   "err.msMetaCut": "网络中断了，记录没有下完。",
   "err.msFile": "OneDrive 上的文件下载失败。",

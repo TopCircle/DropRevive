@@ -303,6 +303,7 @@ export const en: LanguagePack = {
     "err.msNoFolder": "OneDrive did not return a folder id.",
     "err.msFolderExists": "The OneDrive folder already exists, but no id came back.",
     "err.msNoUrl": "OneDrive did not provide a download URL.",
+    "err.msLargeNoPicker": "This file is over about 32 MB, and this browser cannot save it under its original name. Use Chrome or Edge.",
     "err.msMeta": "Could not download this drop from OneDrive.",
     "err.msMetaCut": "The network dropped before the drop finished downloading.",
     "err.msFile": "Could not download this file from OneDrive.",
