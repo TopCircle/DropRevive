@@ -257,6 +257,7 @@ export async function connectSession(input: {
     const offer = await peer.createOffer();
     const sdp = attachStreamCap(offer.sdp || "", plat);
     await peer.setLocalDescription({ type: "offer", sdp });
+    // Signal this text, not localDescription: Chrome drops the unknown attribute.
     emit({ kind: "offer", sdp, gen: 1, fresh: true });
     neg = { ...neg, pendingGen: 1 };
   }

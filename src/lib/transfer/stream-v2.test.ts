@@ -33,14 +33,32 @@ describe("SDP stream-v2 capability", () => {
     assert.equal(parseStreamCap("offer-sdp"), null);
   });
 
-  it("inserts a session-level attribute on a real offer, which an old client would ignore", () => {
-    const sdp = "v=0\r\no=- 1 1 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n";
-    const next = attachStreamCap(sdp, "ios");
-    assert.equal(next.startsWith("v=0\r\n" + streamCapLine("ios") + "\r\n"), true);
-    assert.ok(next.includes("m=application"));
+  it("inserts the capability before the first m= line, after o=, for both line endings", () => {
+    const crlf = "v=0\r\no=- 1 1 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\n";
+    const next = attachStreamCap(crlf, "ios");
+    const lines = next.split("\r\n");
+    const cap = lines.indexOf(streamCapLine("ios"));
+    assert.ok(cap > lines.findIndex((line) => line.startsWith("o=")));
+    assert.equal(lines[cap + 1], "m=application 9 UDP/DTLS/SCTP webrtc-datachannel");
+    assert.equal(next.includes("v=0\r\n" + streamCapLine("ios")), false);
     assert.deepEqual(parseStreamCap(next), { v2: true, plat: "ios" });
-    // A second attach is a no-op (do not duplicate).
     assert.equal(attachStreamCap(next, "other"), next);
+
+    const lf = crlf.replaceAll("\r\n", "\n");
+    const lfNext = attachStreamCap(lf, "safari");
+    const lfLines = lfNext.split("\n");
+    const lfCap = lfLines.indexOf(streamCapLine("safari"));
+    assert.ok(lfCap > lfLines.findIndex((line) => line.startsWith("o=")));
+    assert.equal(lfLines[lfCap + 1]?.startsWith("m="), true);
+    assert.deepEqual(parseStreamCap(lfNext), { v2: true, plat: "safari" });
+    assert.equal(attachStreamCap(lfNext, "ios"), lfNext);
+  });
+
+  it("leaves an SDP with no media line unchanged", () => {
+    const noMedia = "v=0\r\no=- 1 1 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\n";
+    assert.equal(attachStreamCap(noMedia, "other"), noMedia);
+    assert.equal(parseStreamCap(noMedia), null);
+    assert.equal(negotiatedLimits("other", parseStreamCap(noMedia)).v2, false);
   });
 
   it("detects platform from the user agent", () => {
