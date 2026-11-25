@@ -11,7 +11,14 @@ import {
   V2_MAX_FILES,
 } from "./limits.ts";
 
-/** SDP capability line. Unknown attributes are ignored by old clients; we never send new JSON to them. */
+/**
+ * SDP capability line. Placed with the session attributes, before the first
+ * media line. A line between v= and o= is illegal and Chromium rejects the
+ * whole description. Unknown attributes in a legal place are ignored by old
+ * clients. We never send new JSON to a peer that did not advertise this line.
+ * Callers signal the returned text: Chrome may strip the attribute from
+ * localDescription, so the peer's cap is not read from that copy.
+ */
 
 export type StreamPlat = "ios" | "safari" | "other";
 
@@ -27,12 +34,14 @@ export function streamCapLine(plat: StreamPlat): string {
   return `a=${STREAM_CAP_NAME}:stream-v2 ${plat}`;
 }
 
-/** Insert the capability at session level, only on a real SDP (starts with v=0). Test stubs are left alone. */
+/** Insert before the first m= line. No media line, or no origin line: leave the text alone. Stubs that do not start with v=0 are left alone. */
 export function attachStreamCap(sdp: string, plat: StreamPlat): string {
   if (!sdp.startsWith("v=0") || hasStreamCap(sdp)) return sdp;
   const nl = sdp.includes("\r\n") ? "\r\n" : "\n";
-  const head = sdp.startsWith("v=0\r\n") ? "v=0\r\n" : "v=0\n";
-  return head + streamCapLine(plat) + nl + sdp.slice(head.length);
+  const originAt = sdp.indexOf(`${nl}o=`);
+  const mediaAt = sdp.indexOf(`${nl}m=`);
+  if (originAt < 0 || mediaAt < 0 || mediaAt < originAt) return sdp;
+  return sdp.slice(0, mediaAt) + nl + streamCapLine(plat) + sdp.slice(mediaAt);
 }
 
 export function parseStreamCap(sdp: string): { v2: true; plat: StreamPlat } | null {

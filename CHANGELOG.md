@@ -6,6 +6,12 @@ All notable changes to DropRevive. Versions follow [Semantic Versioning](https:/
 
 ## [Unreleased]
 
+### 中文
+- **点对点直连不再因能力行位置失败**：`a=x-droprevive:stream-v2` 写在会话属性区、第一条 `m=` 之前。写在 `v=` 和 `o=` 之间时，Chromium 会拒绝整份 SDP，两端在交换候选地址之前就看到「两台设备没能直连」。信令仍发送插入后的原文；Chrome 可能从 `localDescription` 去掉这行未知属性，对端能力不从那份副本读取。仍无 TURN。浏览器测试只确认描述能被解析，不代表数据通道已连通。
+
+### English
+- **Direct connect no longer fails on the capability line's position**: `a=x-droprevive:stream-v2` is written with the session attributes, before the first `m=` line. Between `v=` and `o=`, Chromium rejects the whole SDP and both sides show the direct-connect failure before any candidate is exchanged. Signaling still sends that text; Chrome may drop the unknown attribute from `localDescription`, and the peer's capability is not read from that copy. Still no TURN. The browser test only checks that the description parses, not that a data channel connected.
+
 ## [1.4.0] - 2026-11-17
 
 1.4.0 包含此前未单独发布的云盘流式下载、点对点可续传，以及 Google 下载状态修复。线上是否在跑这一版，以设置页底部的版本号和 `production` 标签为准。 / 1.4.0 includes the streaming cloud downloads, resumable P2P, and the Google download-state fix that had not shipped on their own. Whether the live site is running this version is the version at the bottom of Settings and the commit the `production` tag points at.
