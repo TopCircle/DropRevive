@@ -10,7 +10,7 @@ DropRevive 是独立项目，用来补 Edge Drop 停用之后的同类需求。�
 
 线上试用：<https://drop.habor.dpdns.org> · 自己部署：[一键部署到 Cloudflare](#给自己部署的人)
 
-本仓库的 1.4.0 包含云盘边下边存、可续传的点对点直传，以及 Google 下载的点击状态。线上正在运行的构建，以设置页底部的版本号和 `production` 标签所指的提交为准。
+本仓库的 1.4.1 修复了 OneDrive 下载保留原文件名与点对点直连 SDP 能力行位置，并包含 1.4.0 的云盘边下边存、可续传点对点直传及 Google 下载点击状态。线上正在运行的构建，以设置页底部的版本号和 `production` 标签所指的提交为准。
 
 许可证（License）：[MIT](LICENSE)
 

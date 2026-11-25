@@ -10,7 +10,7 @@ DropRevive is an independent project for the kind of need Edge Drop used to cove
 
 Try it live: <https://drop.habor.dpdns.org> · Self-host: [Deploy to Cloudflare](#for-people-who-self-host)
 
-Version 1.4.0 in this repository adds streaming cloud downloads, resumable direct transfer, and a visible state for Google downloads. The build running on the live site is the version at the bottom of Settings and the commit the `production` tag points at.
+Version 1.4.1 in this repository fixes OneDrive download file names and the P2P SDP capability line position, building on 1.4.0's streaming cloud downloads, resumable direct transfer, and visible Google download state. The build running on the live site is the version at the bottom of Settings and the commit the `production` tag points at.
 
 License: [MIT](LICENSE)
 
